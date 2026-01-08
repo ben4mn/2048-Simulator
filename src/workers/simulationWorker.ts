@@ -5,7 +5,9 @@
 
 import { GameEngine } from '../engine/gameEngine';
 import { createStrategy } from '../engine/strategy';
+import { CustomStrategyFactory } from '../engine/customStrategyFactory';
 import type { GameResult } from '../engine/types';
+import type { CustomRule } from '../engine/customRules';
 
 export interface SimulationJob {
   jobId: string;
@@ -14,6 +16,8 @@ export interface SimulationJob {
   strategyParams?: any;
   seeds: string[];
   batchId: string;
+  customRules?: CustomRule[];
+  customStrategyName?: string;
 }
 
 export interface SimulationProgress {
@@ -30,7 +34,12 @@ self.onmessage = (e: MessageEvent) => {
 };
 
 function runSimulation(job: SimulationJob) {
-  const strategy = createStrategy(job.strategyType, job.strategyParams);
+  // Create strategy - either custom or built-in
+  const strategy =
+    job.customRules && job.customRules.length > 0
+      ? CustomStrategyFactory.createFromRules(job.customRules, job.customStrategyName)
+      : createStrategy(job.strategyType, job.strategyParams);
+
   const results: GameResult[] = [];
   const startTime = Date.now();
 

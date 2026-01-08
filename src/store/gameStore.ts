@@ -34,6 +34,8 @@ interface GameStore {
     batchSize: number;
     seedMode: 'random' | 'fixed' | 'shared';
     fixedSeed?: string;
+    customRules?: any[];
+    customStrategyName?: string;
   }) => void;
   stopBatchSimulation: () => void;
   loadAllResults: () => Promise<void>;
@@ -190,6 +192,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       strategyParams: config.strategyParams,
       seeds,
       batchId,
+      customRules: config.customRules,
+      customStrategyName: config.customStrategyName,
     };
 
     worker.postMessage(job);
