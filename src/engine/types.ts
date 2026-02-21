@@ -46,6 +46,35 @@ export interface GameResult {
 export interface StrategyConfig {
   id: string;
   name: string;
-  type: 'directional' | 'corner_anchor' | 'hybrid' | 'random';
+  type: 'directional' | 'corner_anchor' | 'hybrid' | 'random' | 'custom_rule';
   params: Record<string, any>;
+}
+
+// ---- Rule Set System ----
+
+export type BoardCheck =
+  | { type: 'highest_tile_in'; positions: [number, number][] }
+  | { type: 'merge_available'; direction: Direction }
+  | { type: 'empty_cells_above'; threshold: number }
+  | { type: 'empty_cells_below'; threshold: number };
+
+export type RuleCondition =
+  | { type: 'always' }
+  | { type: 'fallback'; whenUnavailable: Direction[] }
+  | { type: 'board'; check: BoardCheck };
+
+export interface Rule {
+  id: string;
+  direction: Direction;
+  condition: RuleCondition;
+  priority: number;
+}
+
+export interface RuleSet {
+  id: string;
+  name: string;
+  description?: string;
+  rules: Rule[];
+  fallbackDirection?: Direction;
+  source: 'manual' | 'arrow_keys' | 'llm';
 }

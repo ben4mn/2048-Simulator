@@ -3,10 +3,10 @@
  * Stores game results, batches, and strategies
  */
 
-import type { GameResult } from '../engine/types';
+import type { GameResult, RuleSet } from '../engine/types';
 
 const DB_NAME = '2048-simulator';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export interface Batch {
   id: string;
@@ -65,6 +65,10 @@ class Database {
 
         if (!db.objectStoreNames.contains('strategies')) {
           db.createObjectStore('strategies', { keyPath: 'id' });
+        }
+
+        if (!db.objectStoreNames.contains('ruleSets')) {
+          db.createObjectStore('ruleSets', { keyPath: 'id' });
         }
       };
     });
@@ -197,11 +201,48 @@ class Database {
     });
   }
 
+  // RuleSet operations
+  async saveRuleSet(ruleSet: RuleSet): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore('ruleSets', 'readwrite');
+      const request = store.put(ruleSet);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getRuleSet(id: string): Promise<RuleSet | null> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore('ruleSets');
+      const request = store.get(id);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getAllRuleSets(): Promise<RuleSet[]> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore('ruleSets');
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async deleteRuleSet(id: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore('ruleSets', 'readwrite');
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   // Clear all data
   async clearAll(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
 
-    const storeNames = ['games', 'batches', 'strategies'];
+    const storeNames = ['games', 'batches', 'strategies', 'ruleSets'];
     const promises = storeNames.map((name) => {
       return new Promise<void>((resolve, reject) => {
         const store = this.getStore(name, 'readwrite');

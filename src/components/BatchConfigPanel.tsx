@@ -5,6 +5,8 @@
 
 import React, { useState } from 'react';
 import { generateSeed } from '../engine/rng';
+import type { RuleSet } from '../engine/types';
+import RuleSetPreview from './RuleSetPreview';
 
 export interface BatchConfig {
   strategyType: string;
@@ -17,12 +19,20 @@ export interface BatchConfig {
 interface BatchConfigPanelProps {
   onStartBatch: (config: BatchConfig) => void;
   isRunning: boolean;
+  currentRuleSet: RuleSet | null;
+  onGoToBuild: () => void;
 }
 
 export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
   onStartBatch,
   isRunning,
+  currentRuleSet,
+  onGoToBuild,
 }) => {
+  const hasCustomRuleSet = currentRuleSet && currentRuleSet.rules.length > 0;
+  const [strategySource, setStrategySource] = useState<'preset' | 'custom'>(
+    hasCustomRuleSet ? 'custom' : 'preset'
+  );
   const [strategyType, setStrategyType] = useState('directional_priority');
   const [corner, setCorner] = useState('bottom-left');
   const [batchSize, setBatchSize] = useState(100);
@@ -30,14 +40,26 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
   const [fixedSeed, setFixedSeed] = useState(generateSeed());
 
   const handleStart = () => {
-    const config: BatchConfig = {
-      strategyType,
-      strategyParams:
-        strategyType === 'corner_anchor' ? { corner } : undefined,
-      batchSize,
-      seedMode,
-      fixedSeed: seedMode === 'fixed' ? fixedSeed : undefined,
-    };
+    let config: BatchConfig;
+
+    if (strategySource === 'custom' && hasCustomRuleSet) {
+      config = {
+        strategyType: 'custom_rule',
+        strategyParams: { ruleSet: currentRuleSet },
+        batchSize,
+        seedMode,
+        fixedSeed: seedMode === 'fixed' ? fixedSeed : undefined,
+      };
+    } else {
+      config = {
+        strategyType,
+        strategyParams:
+          strategyType === 'corner_anchor' ? { corner } : undefined,
+        batchSize,
+        seedMode,
+        fixedSeed: seedMode === 'fixed' ? fixedSeed : undefined,
+      };
+    }
     onStartBatch(config);
   };
 
@@ -45,41 +67,112 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
     <div className="bg-white rounded-xl shadow-lg p-6 space-y-6">
       <h2 className="text-2xl font-bold text-amber-900">Batch Simulation</h2>
 
-      {/* Strategy Selection */}
+      {/* Strategy Source Toggle */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Strategy
+          Strategy Source
         </label>
-        <select
-          value={strategyType}
-          onChange={(e) => setStrategyType(e.target.value)}
-          disabled={isRunning}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500"
-        >
-          <option value="directional_priority">Directional Priority (L→D→R→U)</option>
-          <option value="corner_anchor">Corner Anchor</option>
-          <option value="merge_max">Merge Maximization</option>
-          <option value="random">Random (Baseline)</option>
-        </select>
+        <div className="flex rounded-lg bg-gray-100 p-1">
+          <button
+            onClick={() => setStrategySource('preset')}
+            className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-all ${
+              strategySource === 'preset'
+                ? 'bg-white text-amber-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+            disabled={isRunning}
+          >
+            Preset Strategy
+          </button>
+          <button
+            onClick={() => setStrategySource('custom')}
+            className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-all ${
+              strategySource === 'custom'
+                ? 'bg-white text-amber-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+            disabled={isRunning}
+          >
+            Custom Rule Set
+          </button>
+        </div>
       </div>
 
-      {/* Corner selection for Corner Anchor strategy */}
-      {strategyType === 'corner_anchor' && (
+      {/* Preset Strategy Selection */}
+      {strategySource === 'preset' && (
+        <>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Strategy
+            </label>
+            <select
+              value={strategyType}
+              onChange={(e) => setStrategyType(e.target.value)}
+              disabled={isRunning}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="directional_priority">Directional Priority (L-D-R-U)</option>
+              <option value="corner_anchor">Corner Anchor</option>
+              <option value="merge_max">Merge Maximization</option>
+              <option value="random">Random (Baseline)</option>
+            </select>
+          </div>
+
+          {strategyType === 'corner_anchor' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Corner Position
+              </label>
+              <select
+                value={corner}
+                onChange={(e) => setCorner(e.target.value)}
+                disabled={isRunning}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="bottom-left">Bottom Left</option>
+                <option value="bottom-right">Bottom Right</option>
+                <option value="top-left">Top Left</option>
+                <option value="top-right">Top Right</option>
+              </select>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Custom Rule Set Display */}
+      {strategySource === 'custom' && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Corner Position
-          </label>
-          <select
-            value={corner}
-            onChange={(e) => setCorner(e.target.value)}
-            disabled={isRunning}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500"
-          >
-            <option value="bottom-left">Bottom Left</option>
-            <option value="bottom-right">Bottom Right</option>
-            <option value="top-left">Top Left</option>
-            <option value="top-right">Top Right</option>
-          </select>
+          {hasCustomRuleSet ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-sm text-gray-800">{currentRuleSet!.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {currentRuleSet!.rules.length} rules | Source: {currentRuleSet!.source}
+                  </div>
+                </div>
+                <button
+                  onClick={onGoToBuild}
+                  className="text-xs text-amber-600 hover:text-amber-700 font-medium"
+                  disabled={isRunning}
+                >
+                  Edit
+                </button>
+              </div>
+              <RuleSetPreview ruleSet={currentRuleSet!} />
+            </div>
+          ) : (
+            <div className="text-center py-6 border-2 border-dashed border-gray-300 rounded-lg">
+              <p className="text-gray-500 text-sm mb-3">No custom rule set built yet</p>
+              <button
+                onClick={onGoToBuild}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg"
+                disabled={isRunning}
+              >
+                Go to Rule Builder
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -190,7 +283,7 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
       {/* Start Button */}
       <button
         onClick={handleStart}
-        disabled={isRunning}
+        disabled={isRunning || (strategySource === 'custom' && !hasCustomRuleSet)}
         className="w-full px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isRunning ? 'Running...' : 'Start Batch Simulation'}

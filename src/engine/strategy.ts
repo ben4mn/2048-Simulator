@@ -2,7 +2,7 @@
  * Strategy system for automated 2048 gameplay
  */
 
-import type { Board, Direction } from './types';
+import type { Board, Direction, RuleSet, RuleCondition, BoardCheck } from './types';
 import { GameEngine } from './gameEngine';
 
 export interface Strategy {
@@ -200,6 +200,115 @@ export class RandomStrategy implements Strategy {
 }
 
 /**
+ * Custom Rule Strategy
+ * Evaluates a user-defined RuleSet top-to-bottom by priority
+ */
+export class CustomRuleStrategy implements Strategy {
+  id: string;
+  name: string;
+  private ruleSet: RuleSet;
+
+  constructor(ruleSet: RuleSet) {
+    this.ruleSet = ruleSet;
+    this.id = `custom_rule_${ruleSet.id}`;
+    this.name = ruleSet.name || 'Custom Rule Set';
+  }
+
+  selectMove(engine: GameEngine): Direction | null {
+    const state = engine.getState();
+    const validMoves = engine.getValidMoves();
+    if (validMoves.length === 0) return null;
+
+    // Sort rules by priority (lower number = higher priority)
+    const sortedRules = [...this.ruleSet.rules].sort((a, b) => a.priority - b.priority);
+
+    for (const rule of sortedRules) {
+      if (!validMoves.includes(rule.direction)) continue;
+      if (this.evaluateCondition(rule.condition, engine, state.board, validMoves)) {
+        return rule.direction;
+      }
+    }
+
+    // Fallback: use fallbackDirection if set and valid
+    if (this.ruleSet.fallbackDirection && validMoves.includes(this.ruleSet.fallbackDirection)) {
+      return this.ruleSet.fallbackDirection;
+    }
+
+    // Last resort: first valid move
+    return validMoves[0];
+  }
+
+  private evaluateCondition(
+    condition: RuleCondition,
+    engine: GameEngine,
+    board: Board,
+    validMoves: Direction[]
+  ): boolean {
+    switch (condition.type) {
+      case 'always':
+        return true;
+
+      case 'fallback':
+        // Only fire when ALL listed directions are unavailable
+        return condition.whenUnavailable.every(dir => !validMoves.includes(dir));
+
+      case 'board':
+        return this.evaluateBoardCheck(condition.check, engine, board);
+
+      default:
+        return true;
+    }
+  }
+
+  private evaluateBoardCheck(
+    check: BoardCheck,
+    engine: GameEngine,
+    board: Board
+  ): boolean {
+    switch (check.type) {
+      case 'highest_tile_in': {
+        let maxTile = 0;
+        for (const row of board) {
+          for (const tile of row) {
+            if (tile > maxTile) maxTile = tile;
+          }
+        }
+        return check.positions.some(
+          ([r, c]) => board[r]?.[c] === maxTile
+        );
+      }
+
+      case 'merge_available': {
+        return engine.isValidMove(check.direction);
+      }
+
+      case 'empty_cells_above': {
+        let emptyCells = 0;
+        for (const row of board) {
+          for (const tile of row) {
+            if (tile === 0) emptyCells++;
+          }
+        }
+        return emptyCells > check.threshold;
+      }
+
+      case 'empty_cells_below': {
+        let emptyCells = 0;
+        for (const row of board) {
+          for (const tile of row) {
+            if (tile === 0) emptyCells++;
+          }
+        }
+        return emptyCells < check.threshold;
+      }
+
+      default:
+        return true;
+    }
+  }
+}
+
+/**
  * Strategy Factory
  */
 export function createStrategy(type: string, params?: any): Strategy {
@@ -212,6 +321,8 @@ export function createStrategy(type: string, params?: any): Strategy {
       return new MergeMaxStrategy();
     case 'random':
       return new RandomStrategy();
+    case 'custom_rule':
+      return new CustomRuleStrategy(params?.ruleSet);
     default:
       return new DirectionalPriorityStrategy();
   }

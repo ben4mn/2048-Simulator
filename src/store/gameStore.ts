@@ -5,7 +5,7 @@
 import { create } from 'zustand';
 import { GameEngine } from '../engine/gameEngine';
 import { generateSeed } from '../engine/rng';
-import type { GameState, Direction, GameResult } from '../engine/types';
+import type { GameState, Direction, GameResult, RuleSet } from '../engine/types';
 import type { SimulationJob, SimulationProgress } from '../workers/simulationWorker';
 import { db } from '../storage/db';
 
@@ -38,10 +38,19 @@ interface GameStore {
   stopBatchSimulation: () => void;
   loadAllResults: () => Promise<void>;
 
+  // Rule set state
+  currentRuleSet: RuleSet | null;
+  savedRuleSets: RuleSet[];
+  setCurrentRuleSet: (ruleSet: RuleSet) => void;
+  saveRuleSet: (ruleSet: RuleSet) => void;
+  loadRuleSet: (ruleSet: RuleSet) => void;
+  deleteRuleSet: (id: string) => void;
+  loadSavedRuleSets: () => Promise<void>;
+
   // View state
   selectedGameId: string | null;
-  viewMode: 'play' | 'batch' | 'results';
-  setViewMode: (mode: 'play' | 'batch' | 'results') => void;
+  viewMode: 'play' | 'build' | 'batch' | 'results';
+  setViewMode: (mode: 'play' | 'build' | 'batch' | 'results') => void;
   selectGame: (gameId: string | null) => void;
 
   // Initialize
@@ -60,11 +69,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   worker: null,
   selectedGameId: null,
   viewMode: 'play',
+  currentRuleSet: null,
+  savedRuleSets: [],
 
   // Initialize database and load existing results
   initialize: async () => {
     await db.init();
     await get().loadAllResults();
+    await get().loadSavedRuleSets();
   },
 
   // Start a new game
@@ -226,6 +238,42 @@ export const useGameStore = create<GameStore>((set, get) => ({
   loadAllResults: async () => {
     const games = await db.getAllGames();
     set({ batchResults: games });
+  },
+
+  // Rule set management
+  setCurrentRuleSet: (ruleSet) => {
+    set({ currentRuleSet: ruleSet });
+  },
+
+  saveRuleSet: (ruleSet) => {
+    db.saveRuleSet(ruleSet);
+    const { savedRuleSets } = get();
+    const existing = savedRuleSets.findIndex(rs => rs.id === ruleSet.id);
+    if (existing >= 0) {
+      const updated = [...savedRuleSets];
+      updated[existing] = ruleSet;
+      set({ savedRuleSets: updated });
+    } else {
+      set({ savedRuleSets: [...savedRuleSets, ruleSet] });
+    }
+  },
+
+  loadRuleSet: (ruleSet) => {
+    set({ currentRuleSet: { ...ruleSet, id: `rs_${Date.now()}` } });
+  },
+
+  deleteRuleSet: (id) => {
+    db.deleteRuleSet(id);
+    const { savedRuleSets, currentRuleSet } = get();
+    set({
+      savedRuleSets: savedRuleSets.filter(rs => rs.id !== id),
+      currentRuleSet: currentRuleSet?.id === id ? null : currentRuleSet,
+    });
+  },
+
+  loadSavedRuleSets: async () => {
+    const ruleSets = await db.getAllRuleSets();
+    set({ savedRuleSets: ruleSets });
   },
 
   // View controls

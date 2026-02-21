@@ -6,6 +6,7 @@ import BatchConfigPanel from './components/BatchConfigPanel'
 import BatchResultsGrid from './components/BatchResultsGrid'
 import ProgressIndicator from './components/ProgressIndicator'
 import GameReplay from './components/GameReplay'
+import RuleBuilder from './components/RuleBuilder'
 import type { Direction } from './engine/types'
 
 function App() {
@@ -25,6 +26,12 @@ function App() {
     batchResults,
     selectedGameId,
     selectGame,
+    currentRuleSet,
+    savedRuleSets,
+    setCurrentRuleSet,
+    saveRuleSet,
+    loadRuleSet,
+    deleteRuleSet,
   } = useGameStore()
 
   // Initialize database and load results on mount
@@ -73,6 +80,13 @@ function App() {
     ? batchResults.find((g) => g.id === selectedGameId)
     : null
 
+  const tabs = [
+    { key: 'play' as const, label: 'Play' },
+    { key: 'build' as const, label: 'Build' },
+    { key: 'batch' as const, label: 'Simulate' },
+    { key: 'results' as const, label: `Results (${batchResults.length})` },
+  ]
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100">
       <div className="container mx-auto px-4 py-8">
@@ -84,36 +98,19 @@ function App() {
         {/* Tab Navigation */}
         <div className="max-w-6xl mx-auto mb-6">
           <div className="flex justify-center gap-2">
-            <button
-              onClick={() => setViewMode('play')}
-              className={`px-6 py-3 font-semibold rounded-lg transition-colors ${
-                viewMode === 'play'
-                  ? 'bg-amber-600 text-white shadow-md'
-                  : 'bg-white text-amber-900 hover:bg-amber-100'
-              }`}
-            >
-              Play
-            </button>
-            <button
-              onClick={() => setViewMode('batch')}
-              className={`px-6 py-3 font-semibold rounded-lg transition-colors ${
-                viewMode === 'batch'
-                  ? 'bg-amber-600 text-white shadow-md'
-                  : 'bg-white text-amber-900 hover:bg-amber-100'
-              }`}
-            >
-              Batch Simulation
-            </button>
-            <button
-              onClick={() => setViewMode('results')}
-              className={`px-6 py-3 font-semibold rounded-lg transition-colors ${
-                viewMode === 'results'
-                  ? 'bg-amber-600 text-white shadow-md'
-                  : 'bg-white text-amber-900 hover:bg-amber-100'
-              }`}
-            >
-              Results ({batchResults.length})
-            </button>
+            {tabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setViewMode(tab.key)}
+                className={`px-6 py-3 font-semibold rounded-lg transition-colors ${
+                  viewMode === tab.key
+                    ? 'bg-amber-600 text-white shadow-md'
+                    : 'bg-white text-amber-900 hover:bg-amber-100'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -158,30 +155,55 @@ function App() {
                       onClick={() => makeMove('up')}
                       className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded shadow"
                     >
-                      ↑
+                      {'\u2191'}
                     </button>
                     <div></div>
                     <button
                       onClick={() => makeMove('left')}
                       className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded shadow"
                     >
-                      ←
+                      {'\u2190'}
                     </button>
                     <button
                       onClick={() => makeMove('down')}
                       className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded shadow"
                     >
-                      ↓
+                      {'\u2193'}
                     </button>
                     <button
                       onClick={() => makeMove('right')}
                       className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded shadow"
                     >
-                      →
+                      {'\u2192'}
                     </button>
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Build View - Rule Builder */}
+          {viewMode === 'build' && (
+            <div className="max-w-3xl mx-auto">
+              <RuleBuilder
+                ruleSet={currentRuleSet}
+                onChange={setCurrentRuleSet}
+                savedRuleSets={savedRuleSets}
+                onSave={saveRuleSet}
+                onLoad={loadRuleSet}
+                onDelete={deleteRuleSet}
+              />
+              {/* Quick action to simulate */}
+              {currentRuleSet && currentRuleSet.rules.length > 0 && (
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => setViewMode('batch')}
+                    className="px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-semibold rounded-lg shadow-md transition-all"
+                  >
+                    Test this Rule Set in Simulation {'\u2192'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -191,6 +213,8 @@ function App() {
               <BatchConfigPanel
                 onStartBatch={startBatchSimulation}
                 isRunning={isRunningBatch}
+                currentRuleSet={currentRuleSet}
+                onGoToBuild={() => setViewMode('build')}
               />
 
               {isRunningBatch && (
