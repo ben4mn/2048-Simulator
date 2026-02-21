@@ -200,6 +200,226 @@ export class RandomStrategy implements Strategy {
 }
 
 /**
+ * Pattern Strategy
+ * Repeats a fixed sequence of moves
+ */
+export class PatternStrategy implements Strategy {
+  id = 'pattern';
+  name: string;
+  private pattern: Direction[];
+  private currentIndex: number = 0;
+
+  constructor(pattern: Direction[], name?: string) {
+    this.pattern = pattern;
+    this.name = name || `Pattern (${pattern.join('-')})`;
+  }
+
+  selectMove(engine: GameEngine): Direction | null {
+    // Try moves in pattern order, cycling through
+    const startIndex = this.currentIndex;
+
+    do {
+      const direction = this.pattern[this.currentIndex];
+      this.currentIndex = (this.currentIndex + 1) % this.pattern.length;
+
+      if (engine.isValidMove(direction)) {
+        return direction;
+      }
+    } while (this.currentIndex !== startIndex);
+
+    return null; // No valid moves
+  }
+}
+
+/**
+ * Conditional Strategy
+ * Executes rules based on board conditions
+ */
+export class ConditionalStrategy implements Strategy {
+  id = 'conditional';
+  name: string;
+  private rules: Array<{
+    condition: (board: Board) => boolean;
+    actions: Direction[];
+    priority: number;
+  }>;
+  private fallback: Strategy;
+
+  constructor(
+    rules: Array<{ condition: (board: Board) => boolean; actions: Direction[]; priority: number }>,
+    name?: string
+  ) {
+    this.rules = rules.sort((a, b) => b.priority - a.priority); // Higher priority first
+    this.name = name || 'Conditional';
+    this.fallback = new DirectionalPriorityStrategy();
+  }
+
+  selectMove(engine: GameEngine): Direction | null {
+    const board = engine.getState().board;
+
+    // Evaluate rules in priority order
+    for (const rule of this.rules) {
+      if (rule.condition(board)) {
+        // Try actions in order
+        for (const direction of rule.actions) {
+          if (engine.isValidMove(direction)) {
+            return direction;
+          }
+        }
+      }
+    }
+
+    // Fallback to directional priority
+    return this.fallback.selectMove(engine);
+  }
+}
+
+/**
+ * Look-Ahead Strategy
+ * Evaluates moves by looking N moves ahead
+ */
+export class LookAheadStrategy implements Strategy {
+  id = 'lookahead';
+  name: string;
+  private depth: number;
+  private evaluateBoard: (board: Board) => number;
+
+  constructor(depth: number, evaluateBoard: (board: Board) => number, name?: string) {
+    this.depth = Math.max(1, Math.min(depth, 3)); // Clamp to 1-3
+    this.evaluateBoard = evaluateBoard;
+    this.name = name || `Look-Ahead (depth ${this.depth})`;
+  }
+
+  selectMove(engine: GameEngine): Direction | null {
+    const directions: Direction[] = ['up', 'down', 'left', 'right'];
+    let bestDirection: Direction | null = null;
+    let bestScore = -Infinity;
+
+    for (const direction of directions) {
+      if (!engine.isValidMove(direction)) continue;
+
+      // Simulate the move
+      const score = this.evaluateMove(engine, direction, this.depth);
+      if (score > bestScore) {
+        bestScore = score;
+        bestDirection = direction;
+      }
+    }
+
+    return bestDirection;
+  }
+
+  private evaluateMove(engine: GameEngine, direction: Direction, depth: number): number {
+    // Create a temporary engine to simulate
+    const tempEngine = new GameEngine(engine.getSeed());
+    const currentState = engine.getState();
+
+    // Replay moves to get to current state
+    // NOTE: This is simplified - in production you'd want to clone state more efficiently
+    for (const move of currentState.moves) {
+      const moveMap: Record<string, Direction> = { U: 'up', D: 'down', L: 'left', R: 'right' };
+      tempEngine.move(moveMap[move]);
+    }
+
+    // Make the test move
+    if (!tempEngine.move(direction)) {
+      return -Infinity;
+    }
+
+    // If we've reached target depth, evaluate
+    if (depth === 1) {
+      return this.evaluateBoard(tempEngine.getState().board);
+    }
+
+    // Otherwise, recursively evaluate next moves (expectimax style)
+    const directions: Direction[] = ['up', 'down', 'left', 'right'];
+    let totalScore = 0;
+    let validMoves = 0;
+
+    for (const nextDir of directions) {
+      if (tempEngine.isValidMove(nextDir)) {
+        totalScore += this.evaluateMove(tempEngine, nextDir, depth - 1);
+        validMoves++;
+      }
+    }
+
+    return validMoves > 0 ? totalScore / validMoves : this.evaluateBoard(tempEngine.getState().board);
+  }
+}
+
+/**
+ * Weighted Strategy
+ * Scores each move based on weighted criteria
+ */
+export class WeightedStrategy implements Strategy {
+  id = 'weighted';
+  name: string;
+  private evaluateBoard: (board: Board) => number;
+
+  constructor(evaluateBoard: (board: Board) => number, name?: string) {
+    this.evaluateBoard = evaluateBoard;
+    this.name = name || 'Weighted Evaluation';
+  }
+
+  selectMove(engine: GameEngine): Direction | null {
+    const directions: Direction[] = ['up', 'down', 'left', 'right'];
+    let bestDirection: Direction | null = null;
+    let bestScore = -Infinity;
+
+    for (const direction of directions) {
+      if (!engine.isValidMove(direction)) continue;
+
+      // Evaluate the board after this move
+      const tempEngine = new GameEngine(engine.getSeed());
+      const currentState = engine.getState();
+
+      // Replay to current state
+      for (const move of currentState.moves) {
+        const moveMap: Record<string, Direction> = { U: 'up', D: 'down', L: 'left', R: 'right' };
+        tempEngine.move(moveMap[move]);
+      }
+
+      // Make the test move
+      if (tempEngine.move(direction)) {
+        const score = this.evaluateBoard(tempEngine.getState().board);
+        if (score > bestScore) {
+          bestScore = score;
+          bestDirection = direction;
+        }
+      }
+    }
+
+    return bestDirection;
+  }
+}
+
+/**
+ * Custom Strategy
+ * Container that executes multiple rules in priority order
+ */
+export class CustomStrategy implements Strategy {
+  id = 'custom';
+  name: string;
+  private strategies: Strategy[];
+
+  constructor(strategies: Strategy[], name?: string) {
+    this.strategies = strategies;
+    this.name = name || 'Custom Strategy';
+  }
+
+  selectMove(engine: GameEngine): Direction | null {
+    // Try each strategy in order
+    for (const strategy of this.strategies) {
+      const move = strategy.selectMove(engine);
+      if (move !== null) {
+        return move;
+      }
+    }
+    return null;
+  }
+}
+
+/**
  * Strategy Factory
  */
 export function createStrategy(type: string, params?: any): Strategy {
@@ -212,6 +432,20 @@ export function createStrategy(type: string, params?: any): Strategy {
       return new MergeMaxStrategy();
     case 'random':
       return new RandomStrategy();
+    case 'pattern':
+      return new PatternStrategy(params?.pattern || ['left', 'down'], params?.name);
+    case 'conditional':
+      return new ConditionalStrategy(params?.rules || [], params?.name);
+    case 'lookahead':
+      return new LookAheadStrategy(
+        params?.depth || 2,
+        params?.evaluateBoard || (() => 0),
+        params?.name
+      );
+    case 'weighted':
+      return new WeightedStrategy(params?.evaluateBoard || (() => 0), params?.name);
+    case 'custom':
+      return new CustomStrategy(params?.strategies || [], params?.name);
     default:
       return new DirectionalPriorityStrategy();
   }
