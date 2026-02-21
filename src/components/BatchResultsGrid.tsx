@@ -10,6 +10,7 @@ import type { GameResult } from '../engine/types';
 interface BatchResultsGridProps {
   results: GameResult[];
   onSelectGame: (gameId: string) => void;
+  onPlaySeed?: (seed: string) => void;
   pageSize?: 10 | 20 | 30;
 }
 
@@ -18,6 +19,7 @@ type SortField = 'score' | 'maxTile' | 'moves' | 'result';
 export const BatchResultsGrid: React.FC<BatchResultsGridProps> = ({
   results,
   onSelectGame,
+  onPlaySeed,
   pageSize: initialPageSize = 10,
 }) => {
   const [pageSize, setPageSize] = useState(initialPageSize);
@@ -121,6 +123,7 @@ export const BatchResultsGrid: React.FC<BatchResultsGridProps> = ({
             key={result.id}
             result={result}
             onClick={() => onSelectGame(result.id)}
+            onPlaySeed={onPlaySeed}
           />
         ))}
       </div>
@@ -154,7 +157,8 @@ export const BatchResultsGrid: React.FC<BatchResultsGridProps> = ({
 const GameResultCard: React.FC<{
   result: GameResult;
   onClick: () => void;
-}> = ({ result, onClick }) => {
+  onPlaySeed?: (seed: string) => void;
+}> = ({ result, onClick, onPlaySeed }) => {
   // Reconstruct board from final state (simplified - just show empty board for now)
   const emptyBoard = Array(4).fill(null).map(() => Array(4).fill(0));
 
@@ -167,6 +171,10 @@ const GameResultCard: React.FC<{
         <GameBoard board={emptyBoard} size="small" />
       </div>
       <div className="space-y-1 text-xs">
+        <div className="flex justify-between">
+          <span className="text-gray-600">Seed:</span>
+          <span className="font-bold font-mono text-[10px]">{result.seed}</span>
+        </div>
         <div className="flex justify-between">
           <span className="text-gray-600">Score:</span>
           <span className="font-bold">{result.finalScore.toLocaleString()}</span>
@@ -189,6 +197,17 @@ const GameResultCard: React.FC<{
             {result.result.toUpperCase()}
           </span>
         </div>
+        {onPlaySeed && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlaySeed(result.seed);
+            }}
+            className="w-full mt-2 px-2 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-semibold rounded transition-colors"
+          >
+            Play This Seed
+          </button>
+        )}
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { generateSeed } from '../engine/rng';
 import type { GameState, Direction, GameResult } from '../engine/types';
 import type { SimulationJob, SimulationProgress } from '../workers/simulationWorker';
 import { db } from '../storage/db';
+import type { Strategy } from '../storage/db';
 
 interface GameStore {
   // Current game instance
@@ -40,6 +41,12 @@ interface GameStore {
   stopBatchSimulation: () => void;
   loadAllResults: () => Promise<void>;
 
+  // Saved strategies
+  savedStrategies: Strategy[];
+  loadSavedStrategies: () => Promise<void>;
+  saveCustomStrategy: (name: string, customRules: any[]) => Promise<void>;
+  deleteCustomStrategy: (id: string) => Promise<void>;
+
   // View state
   selectedGameId: string | null;
   viewMode: 'play' | 'batch' | 'results';
@@ -62,11 +69,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   worker: null,
   selectedGameId: null,
   viewMode: 'play',
+  savedStrategies: [],
 
   // Initialize database and load existing results
   initialize: async () => {
     await db.init();
     await get().loadAllResults();
+    await get().loadSavedStrategies();
   },
 
   // Start a new game
@@ -230,6 +239,29 @@ export const useGameStore = create<GameStore>((set, get) => ({
   loadAllResults: async () => {
     const games = await db.getAllGames();
     set({ batchResults: games });
+  },
+
+  // Saved strategies
+  loadSavedStrategies: async () => {
+    const strategies = await db.getAllStrategies();
+    set({ savedStrategies: strategies });
+  },
+
+  saveCustomStrategy: async (name: string, customRules: any[]) => {
+    const strategy: Strategy = {
+      id: 'custom_' + Date.now(),
+      name,
+      type: 'custom',
+      params: { customRules },
+      stats: { gamesPlayed: 0, winRate: 0, avgScore: 0, avgMoves: 0, bestScore: 0 },
+    };
+    await db.saveStrategy(strategy);
+    await get().loadSavedStrategies();
+  },
+
+  deleteCustomStrategy: async (id: string) => {
+    await db.deleteStrategy(id);
+    await get().loadSavedStrategies();
   },
 
   // View controls

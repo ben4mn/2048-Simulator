@@ -197,6 +197,15 @@ class Database {
     });
   }
 
+  async deleteStrategy(id: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore('strategies', 'readwrite');
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   // Clear all data
   async clearAll(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');

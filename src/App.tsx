@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useGameStore } from './store/gameStore'
+import { generateSeed } from './engine/rng'
 import GameBoard from './components/GameBoard'
 import GameStats from './components/GameStats'
 import BatchConfigPanel from './components/BatchConfigPanel'
@@ -26,6 +27,14 @@ function App() {
     selectedGameId,
     selectGame,
   } = useGameStore()
+
+  const [playSeed, setPlaySeed] = useState('')
+
+  const handlePlaySeed = useCallback((seed: string) => {
+    setPlaySeed(seed)
+    setViewMode('play')
+    startNewGame(seed)
+  }, [setViewMode, startNewGame])
 
   // Initialize database and load results on mount
   useEffect(() => {
@@ -137,12 +146,31 @@ function App() {
                   <div className="text-sm text-gray-600 text-center">
                     Use arrow keys or WASD to play
                   </div>
+
+                  {/* Seed Input */}
+                  <div className="flex gap-2 w-full max-w-sm">
+                    <input
+                      type="text"
+                      value={playSeed}
+                      onChange={(e) => setPlaySeed(e.target.value.toUpperCase())}
+                      maxLength={8}
+                      placeholder="Enter seed (optional)"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    />
+                    <button
+                      onClick={() => setPlaySeed(generateSeed())}
+                      className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-sm transition-colors"
+                    >
+                      Random
+                    </button>
+                  </div>
+
                   <div className="flex gap-3">
                     <button
-                      onClick={() => startNewGame()}
+                      onClick={() => startNewGame(playSeed || undefined)}
                       className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg shadow-md transition-colors"
                     >
-                      New Game
+                      {playSeed ? 'New Game (Seeded)' : 'New Game'}
                     </button>
                     <button
                       onClick={resetGame}
@@ -225,6 +253,7 @@ function App() {
                 <BatchResultsGrid
                   results={batchResults}
                   onSelectGame={selectGame}
+                  onPlaySeed={handlePlaySeed}
                 />
               )}
             </div>
