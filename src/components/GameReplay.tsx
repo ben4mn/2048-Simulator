@@ -94,88 +94,88 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
   };
 
   if (!gameState) {
-    return <div>Loading...</div>;
+    return <div className="text-gray-400">Loading...</div>;
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6">
+    <div className="fixed inset-0 z-50 md:bg-black/60 md:flex md:items-center md:justify-center md:p-4 bg-dark-bg">
+      <div className="h-full md:h-auto md:max-w-2xl md:w-full md:rounded-xl bg-dark-bg md:bg-surface flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-amber-900">Game Replay</h2>
+        <div className="flex items-center justify-between p-4 shrink-0">
+          <h2 className="text-xl font-bold text-white">Game Replay</h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+            className="text-gray-400 hover:text-white text-2xl font-bold w-8 h-8 flex items-center justify-center"
           >
             ×
           </button>
         </div>
 
         {/* Game Info */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="bg-gray-100 rounded p-2 text-center">
-            <div className="text-xs text-gray-600">Score</div>
-            <div className="text-lg font-bold">{gameState.score.toLocaleString()}</div>
+        <div className="grid grid-cols-3 gap-3 px-4 mb-3 shrink-0">
+          <div className="bg-surface-raised rounded-lg p-2 text-center">
+            <div className="text-[10px] uppercase tracking-wide text-gray-500">Score</div>
+            <div className="text-lg font-bold text-gray-200">{gameState.score.toLocaleString()}</div>
           </div>
-          <div className="bg-gray-100 rounded p-2 text-center">
-            <div className="text-xs text-gray-600">Max Tile</div>
-            <div className="text-lg font-bold">{gameState.maxTile}</div>
+          <div className="bg-surface-raised rounded-lg p-2 text-center">
+            <div className="text-[10px] uppercase tracking-wide text-gray-500">Max Tile</div>
+            <div className="text-lg font-bold text-gray-200">{gameState.maxTile}</div>
           </div>
-          <div className="bg-gray-100 rounded p-2 text-center">
-            <div className="text-xs text-gray-600">Seed</div>
-            <div className="text-sm font-mono font-bold">{seed}</div>
+          <div className="bg-surface-raised rounded-lg p-2 text-center">
+            <div className="text-[10px] uppercase tracking-wide text-gray-500">Seed</div>
+            <div className="text-sm font-mono font-bold text-gray-200">{seed}</div>
           </div>
         </div>
 
-        {/* Game Board */}
-        <div className="flex justify-center mb-4">
-          <GameBoard board={gameState.board} size="large" />
+        {/* Game Board — fills remaining space */}
+        <div className="flex-1 flex items-center justify-center px-4 mb-3 min-h-0">
+          <GameBoard board={gameState.board} size="responsive" />
         </div>
 
         {/* Move Counter */}
-        <div className="text-center mb-4">
-          <div className="text-sm text-gray-600">
+        <div className="text-center mb-2 shrink-0">
+          <div className="text-sm text-gray-400">
             Move {currentMove} of {totalMoves}
           </div>
         </div>
 
         {/* Timeline Slider */}
-        <div className="mb-4">
+        <div className="px-4 mb-3 shrink-0">
           <input
             type="range"
             min={0}
             max={totalMoves}
             value={currentMove}
             onChange={(e) => handleJumpTo(Number(e.target.value))}
-            className="w-full"
+            className="w-full accent-amber-500"
           />
         </div>
 
         {/* Controls */}
-        <div className="flex items-center justify-center gap-2 mb-4">
+        <div className="flex items-center justify-center gap-2 mb-3 shrink-0">
           <button
             onClick={handleReset}
-            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md"
+            className="px-4 py-2 bg-surface-raised hover:bg-dark-border text-gray-300 rounded-md"
             title="Reset to start"
           >
             ⏮
           </button>
           <button
             onClick={handleStepBack}
-            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md"
+            className="px-4 py-2 bg-surface-raised hover:bg-dark-border text-gray-300 rounded-md"
             title="Step back"
           >
             ⏪
           </button>
           <button
             onClick={handlePlayPause}
-            className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-md font-semibold"
+            className="px-6 py-2 bg-amber-500 hover:bg-amber-400 text-gray-900 rounded-md font-semibold"
           >
             {isPlaying ? '⏸ Pause' : '▶ Play'}
           </button>
           <button
             onClick={handleStepForward}
-            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md"
+            className="px-4 py-2 bg-surface-raised hover:bg-dark-border text-gray-300 rounded-md"
             title="Step forward"
           >
             ⏩
@@ -183,40 +183,26 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
         </div>
 
         {/* Speed Control */}
-        <div className="flex items-center justify-center gap-4">
-          <label className="text-sm text-gray-600">Speed:</label>
-          <button
-            onClick={() => setSpeed(1000)}
-            className={`px-3 py-1 text-sm rounded ${
-              speed === 1000 ? 'bg-amber-600 text-white' : 'bg-gray-200'
-            }`}
-          >
-            0.5x
-          </button>
-          <button
-            onClick={() => setSpeed(500)}
-            className={`px-3 py-1 text-sm rounded ${
-              speed === 500 ? 'bg-amber-600 text-white' : 'bg-gray-200'
-            }`}
-          >
-            1x
-          </button>
-          <button
-            onClick={() => setSpeed(250)}
-            className={`px-3 py-1 text-sm rounded ${
-              speed === 250 ? 'bg-amber-600 text-white' : 'bg-gray-200'
-            }`}
-          >
-            2x
-          </button>
-          <button
-            onClick={() => setSpeed(100)}
-            className={`px-3 py-1 text-sm rounded ${
-              speed === 100 ? 'bg-amber-600 text-white' : 'bg-gray-200'
-            }`}
-          >
-            5x
-          </button>
+        <div className="flex items-center justify-center gap-3 pb-4 shrink-0">
+          <label className="text-sm text-gray-400">Speed:</label>
+          {[
+            { label: '0.5x', value: 1000 },
+            { label: '1x', value: 500 },
+            { label: '2x', value: 250 },
+            { label: '5x', value: 100 },
+          ].map((s) => (
+            <button
+              key={s.value}
+              onClick={() => setSpeed(s.value)}
+              className={`px-3 py-1 text-sm rounded-full ${
+                speed === s.value
+                  ? 'bg-amber-500 text-gray-900'
+                  : 'bg-surface-raised text-gray-300'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
       </div>
     </div>

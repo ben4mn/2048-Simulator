@@ -19,8 +19,23 @@ export default {
           512: '#edc850',
           1024: '#edc53f',
           2048: '#edc22e',
-        }
-      }
+        },
+        surface: {
+          DEFAULT: '#1a1d28',
+          raised: '#242836',
+          overlay: 'rgba(0, 0, 0, 0.6)',
+        },
+        dark: {
+          bg: '#0f1117',
+          border: '#2d3348',
+        },
+      },
+      animation: {
+        'tile-appear': 'tile-appear 150ms ease-out',
+        'tile-merge': 'tile-merge 200ms ease-out',
+        'score-pop': 'score-pop 300ms ease-out',
+        'shimmer': 'shimmer 1.5s infinite',
+      },
     },
   },
   plugins: [],

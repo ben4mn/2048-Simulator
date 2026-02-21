@@ -21,17 +21,17 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-sm font-medium text-gray-300">{label}</span>
+        <span className="text-sm font-medium text-gray-400">
           {current} / {total} ({percentage}%)
         </span>
       </div>
-      <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+      <div className="w-full bg-surface-raised rounded-full h-4 overflow-hidden">
         <div
-          className="bg-amber-600 h-full rounded-full transition-all duration-300 ease-out"
+          className="bg-amber-500 h-full rounded-full transition-all duration-300 ease-out relative overflow-hidden"
           style={{ width: `${percentage}%` }}
         >
-          <div className="h-full w-full bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
         </div>
       </div>
     </div>

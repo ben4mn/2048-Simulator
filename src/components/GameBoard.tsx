@@ -4,13 +4,14 @@
  */
 
 import React from 'react';
-import type { Board } from '../engine/types';
+import type { Board, Direction } from '../engine/types';
 
 interface GameBoardProps {
   board: Board;
   className?: string;
-  size?: 'small' | 'medium' | 'large';
+  size?: 'small' | 'responsive' | 'large';
   interactive?: boolean;
+  shiftDirection?: Direction | null;
 }
 
 const getTileColor = (value: number): string => {
@@ -32,25 +33,35 @@ const getTileColor = (value: number): string => {
   return colors[value] || 'bg-[#3c3a32] text-white';
 };
 
-const getSizeClasses = (size: 'small' | 'medium' | 'large') => {
+const shiftAnimationMap: Record<Direction, string> = {
+  left: 'board-shift-left',
+  right: 'board-shift-right',
+  up: 'board-shift-up',
+  down: 'board-shift-down',
+};
+
+const getSizeClasses = (size: 'small' | 'responsive' | 'large') => {
   switch (size) {
     case 'small':
       return {
         container: 'w-40 h-40',
         tile: 'text-sm',
         gap: 'gap-1',
+        padding: 'p-1.5',
       };
-    case 'medium':
+    case 'responsive':
       return {
-        container: 'w-64 h-64',
-        tile: 'text-lg',
-        gap: 'gap-2',
+        container: 'game-board',
+        tile: 'game-board-tile',
+        gap: 'gap-1.5 md:gap-2',
+        padding: 'p-2',
       };
     case 'large':
       return {
         container: 'w-96 h-96',
         tile: 'text-2xl',
         gap: 'gap-3',
+        padding: 'p-2',
       };
   }
 };
@@ -58,21 +69,27 @@ const getSizeClasses = (size: 'small' | 'medium' | 'large') => {
 export const GameBoard: React.FC<GameBoardProps> = ({
   board,
   className = '',
-  size = 'medium',
+  size = 'responsive',
   interactive = false,
+  shiftDirection = null,
 }) => {
   const sizeClasses = getSizeClasses(size);
 
+  const shiftStyle = shiftDirection
+    ? { animation: `${shiftAnimationMap[shiftDirection]} 150ms ease-out` }
+    : undefined;
+
   return (
     <div
-      className={`${sizeClasses.container} ${className} bg-amber-700 rounded-lg p-2 ${sizeClasses.gap} grid grid-cols-4 shadow-lg`}
+      className={`${sizeClasses.container} ${className} bg-[#3c3224] rounded-lg ${sizeClasses.padding} ${sizeClasses.gap} grid grid-cols-4 shadow-lg`}
+      style={shiftStyle}
     >
       {board.map((row, rowIdx) =>
         row.map((value, colIdx) => (
           <div
             key={`${rowIdx}-${colIdx}`}
             className={`
-              ${value === 0 ? 'bg-amber-600/30' : getTileColor(value)}
+              ${value === 0 ? 'bg-white/[0.06]' : getTileColor(value)}
               ${sizeClasses.tile}
               rounded-md
               flex items-center justify-center

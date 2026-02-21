@@ -1,8 +1,9 @@
 /**
  * Game Statistics Display Component
+ * Compact score bar with pop animation
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { GameState } from '../engine/types';
 
 interface GameStatsProps {
@@ -16,71 +17,67 @@ export const GameStats: React.FC<GameStatsProps> = ({
   seed,
   className = '',
 }) => {
-  return (
-    <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 ${className}`}>
-      <StatCard label="Score" value={gameState.score.toLocaleString()} />
-      <StatCard label="Max Tile" value={gameState.maxTile.toString()} />
-      <StatCard label="Moves" value={gameState.moves.length.toString()} />
-      {seed && (
-        <SeedCard seed={seed} />
-      )}
-      {gameState.won && (
-        <div className="col-span-2 md:col-span-4 bg-green-100 border-2 border-green-500 rounded-lg p-3 text-center">
-          <span className="text-green-800 font-bold text-lg">
-            You Won! Reached 2048!
-          </span>
-        </div>
-      )}
-      {gameState.gameOver && !gameState.won && (
-        <div className="col-span-2 md:col-span-4 bg-red-100 border-2 border-red-500 rounded-lg p-3 text-center">
-          <span className="text-red-800 font-bold text-lg">
-            Game Over
-          </span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const StatCard: React.FC<{ label: string; value: string; mono?: boolean }> = ({
-  label,
-  value,
-  mono = false,
-}) => (
-  <div className="bg-white rounded-lg shadow-md p-4">
-    <div className="text-sm text-gray-600 mb-1">{label}</div>
-    <div className={`text-2xl font-bold text-amber-900 ${mono ? 'font-mono text-lg' : ''}`}>
-      {value}
-    </div>
-  </div>
-);
-
-const SeedCard: React.FC<{ seed: string }> = ({ seed }) => {
+  const [scorePop, setScorePop] = useState(false);
   const [copied, setCopied] = useState(false);
+  const prevScore = useRef(gameState.score);
 
-  const handleCopy = () => {
+  useEffect(() => {
+    if (gameState.score !== prevScore.current && gameState.score > prevScore.current) {
+      setScorePop(true);
+      const timer = setTimeout(() => setScorePop(false), 300);
+      prevScore.current = gameState.score;
+      return () => clearTimeout(timer);
+    }
+    prevScore.current = gameState.score;
+  }, [gameState.score]);
+
+  const handleCopySeed = () => {
+    if (!seed) return;
     navigator.clipboard.writeText(seed);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
 
   return (
-    <div
-      onClick={handleCopy}
-      className="bg-white rounded-lg shadow-md p-4 cursor-pointer hover:shadow-lg transition-shadow group"
-      title="Click to copy seed"
-    >
-      <div className="text-sm text-gray-600 mb-1 flex items-center justify-between">
-        <span>Seed</span>
-        <span className="text-xs text-gray-400 group-hover:text-amber-600 transition-colors">
-          {copied ? 'Copied!' : 'Click to copy'}
-        </span>
-      </div>
-      <div className="text-lg font-bold text-amber-900 font-mono">
-        {seed}
-      </div>
+    <div className={`flex items-center justify-between gap-2 ${className}`}>
+      <StatPill
+        label="Score"
+        value={gameState.score.toLocaleString()}
+        pop={scorePop}
+      />
+      <StatPill label="Max" value={gameState.maxTile.toString()} />
+      <StatPill label="Moves" value={gameState.moves.length.toString()} />
+      {seed && (
+        <button
+          onClick={handleCopySeed}
+          className="flex flex-col items-center px-3 py-1.5 bg-surface-raised rounded-lg min-w-[60px] hover:bg-dark-border transition-colors"
+          title="Click to copy seed"
+        >
+          <span className="text-[10px] uppercase tracking-wide text-gray-500">
+            {copied ? 'Copied!' : 'Seed'}
+          </span>
+          <span className="text-sm font-bold text-gray-200 font-mono">
+            {seed}
+          </span>
+        </button>
+      )}
     </div>
   );
 };
+
+const StatPill: React.FC<{ label: string; value: string; pop?: boolean }> = ({
+  label,
+  value,
+  pop = false,
+}) => (
+  <div className="flex flex-col items-center px-3 py-1.5 bg-surface-raised rounded-lg min-w-[60px]">
+    <span className="text-[10px] uppercase tracking-wide text-gray-500">{label}</span>
+    <span
+      className={`text-sm font-bold text-gray-200 ${pop ? 'animate-score-pop' : ''}`}
+    >
+      {value}
+    </span>
+  </div>
+);
 
 export default GameStats;
