@@ -81,15 +81,18 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   return (
     <div
-      className={`${sizeClasses.container} ${className} bg-[#3c3224] rounded-lg ${sizeClasses.padding} ${sizeClasses.gap} grid grid-cols-4 shadow-lg`}
-      style={shiftStyle}
+      className={`${sizeClasses.container} ${className} rounded-lg ${sizeClasses.padding} ${sizeClasses.gap} grid grid-cols-4 shadow-lg border border-[#4f432f]`}
+      style={{
+        ...shiftStyle,
+        backgroundColor: 'var(--color-board-bg)',
+      }}
     >
       {board.map((row, rowIdx) =>
         row.map((value, colIdx) => (
           <div
             key={`${rowIdx}-${colIdx}`}
             className={`
-              ${value === 0 ? 'bg-white/[0.06]' : getTileColor(value)}
+              ${value === 0 ? '' : getTileColor(value)}
               ${sizeClasses.tile}
               rounded-md
               flex items-center justify-center
@@ -98,6 +101,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               ${interactive ? 'hover:scale-105 cursor-pointer' : ''}
               ${value === 0 ? '' : 'shadow-md'}
             `}
+            style={value === 0 ? { backgroundColor: 'var(--color-tile-empty)' } : undefined}
           >
             {value !== 0 && value}
           </div>

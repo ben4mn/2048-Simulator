@@ -32,21 +32,14 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
   const [selectedType, setSelectedType] = useState<RuleType>('pattern');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
-  // Pattern rule state
   const [patternSequence, setPatternSequence] = useState<Direction[]>(['left', 'down']);
-
-  // Conditional rule state
   const [conditionType, setConditionType] = useState<ConditionType>('max_tile_in_corner');
   const [conditionCorner, setConditionCorner] = useState<typeof CORNERS[number]>('bottom-left');
   const [conditionThreshold, setConditionThreshold] = useState(2);
   const [conditionActions, setConditionActions] = useState<Direction[]>(['left', 'down']);
   const [conditionPriority, setConditionPriority] = useState(10);
-
-  // Look-ahead rule state
   const [lookAheadDepth, setLookAheadDepth] = useState(2);
   const [lookAheadWeights, setLookAheadWeights] = useState<EvaluationWeights>(DEFAULT_WEIGHTS);
-
-  // Weighted rule state
   const [weightedWeights, setWeightedWeights] = useState<EvaluationWeights>(DEFAULT_WEIGHTS);
 
   const handleAddRule = () => {
@@ -132,13 +125,12 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
 
   return (
     <div className="space-y-6">
-      {/* Rule Type Selector */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Rule Type</label>
+        <label className="block text-sm font-medium text-text-muted mb-2">Rule Type</label>
         <select
           value={selectedType}
           onChange={(e) => setSelectedType(e.target.value as RuleType)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+          className="w-full px-4 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-lg focus:ring-2 focus:ring-accent"
         >
           <option value="pattern">Fixed Pattern</option>
           <option value="conditional">Conditional</option>
@@ -147,37 +139,36 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
         </select>
       </div>
 
-      {/* Pattern Rule Configuration */}
       {selectedType === 'pattern' && (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-text-muted mb-2">
               Move Sequence (in order)
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {DIRECTIONS.map((dir) => (
                 <button
                   key={dir}
                   onClick={() => setPatternSequence([...patternSequence, dir])}
-                  className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 capitalize font-medium"
+                  className="px-4 py-2 bg-amber-500/20 text-amber-100 rounded-lg hover:bg-amber-500/30 capitalize font-medium"
                 >
                   + {dir}
                 </button>
               ))}
             </div>
           </div>
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <div className="text-sm font-medium text-gray-700 mb-2">Current Sequence:</div>
+          <div className="p-3 bg-surface-raised rounded-lg border border-dark-border">
+            <div className="text-sm font-medium text-text-primary mb-2">Current Sequence:</div>
             <div className="flex flex-wrap gap-2">
               {patternSequence.map((dir, index) => (
                 <span
                   key={index}
-                  className="inline-flex items-center gap-2 px-3 py-1 bg-amber-600 text-white rounded-lg capitalize font-medium"
+                  className="inline-flex items-center gap-2 px-3 py-1 bg-accent text-gray-950 rounded-lg capitalize font-semibold"
                 >
                   {dir}
                   <button
                     onClick={() => setPatternSequence(patternSequence.filter((_, i) => i !== index))}
-                    className="text-white hover:text-red-200"
+                    className="text-gray-900 hover:text-red-800"
                   >
                     ×
                   </button>
@@ -188,15 +179,14 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
         </div>
       )}
 
-      {/* Conditional Rule Configuration */}
       {selectedType === 'conditional' && (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Condition</label>
+            <label className="block text-sm font-medium text-text-muted mb-2">Condition</label>
             <select
               value={conditionType}
               onChange={(e) => setConditionType(e.target.value as ConditionType)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+              className="w-full px-4 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-lg focus:ring-2 focus:ring-accent"
             >
               {CONDITIONS.map((cond) => (
                 <option key={cond.value} value={cond.value}>
@@ -208,11 +198,11 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
 
           {conditionType === 'max_tile_in_corner' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Corner</label>
+              <label className="block text-sm font-medium text-text-muted mb-2">Corner</label>
               <select
                 value={conditionCorner}
                 onChange={(e) => setConditionCorner(e.target.value as typeof CORNERS[number])}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-lg focus:ring-2 focus:ring-accent"
               >
                 {CORNERS.map((corner) => (
                   <option key={corner} value={corner}>
@@ -227,20 +217,20 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
             conditionType === 'monotonic_rows' ||
             conditionType === 'monotonic_cols') && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Threshold</label>
+              <label className="block text-sm font-medium text-text-muted mb-2">Threshold</label>
               <input
                 type="number"
                 value={conditionThreshold}
                 onChange={(e) => setConditionThreshold(parseInt(e.target.value) || 0)}
                 min="0"
                 max="16"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-lg focus:ring-2 focus:ring-accent"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-text-muted mb-2">
               Actions (when condition is true)
             </label>
             <div className="grid grid-cols-4 gap-2">
@@ -250,8 +240,8 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
                   onClick={() => toggleDirection(dir, conditionActions, setConditionActions)}
                   className={`px-4 py-2 rounded-lg capitalize font-medium transition-colors ${
                     conditionActions.includes(dir)
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      ? 'bg-accent text-gray-950'
+                      : 'bg-surface-raised text-text-primary border border-dark-border hover:bg-surface-elevated'
                   }`}
                 >
                   {dir}
@@ -261,7 +251,7 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-text-muted mb-2">
               Priority (higher = evaluated first)
             </label>
             <input
@@ -270,17 +260,16 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
               onChange={(e) => setConditionPriority(parseInt(e.target.value) || 0)}
               min="1"
               max="100"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+              className="w-full px-4 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-lg focus:ring-2 focus:ring-accent"
             />
           </div>
         </div>
       )}
 
-      {/* Look-Ahead Rule Configuration */}
       {selectedType === 'lookahead' && (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-text-muted mb-2">
               Look-Ahead Depth: {lookAheadDepth}
             </label>
             <input
@@ -289,9 +278,9 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
               onChange={(e) => setLookAheadDepth(parseInt(e.target.value))}
               min="1"
               max="3"
-              className="w-full"
+              className="w-full accent-accent"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-text-muted mt-1">
               Higher depth = better moves but slower simulation
             </p>
           </div>
@@ -300,56 +289,55 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
         </div>
       )}
 
-      {/* Weighted Rule Configuration */}
       {selectedType === 'weighted' && (
         <div className="space-y-4">
           <WeightEditor weights={weightedWeights} onChange={setWeightedWeights} />
         </div>
       )}
 
-      {/* Add Rule Button */}
       <button
         onClick={handleAddRule}
-        className="w-full px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
+        className="w-full px-6 py-3 bg-accent text-gray-950 font-semibold rounded-lg hover:bg-accent-strong transition-colors"
       >
         {editingIndex !== null ? 'Update Rule' : 'Add Rule'}
       </button>
 
-      {/* Rules List */}
       {rules.length > 0 && (
         <div className="mt-8">
-          <h3 className="text-lg font-medium text-gray-800 mb-4">Rules (in priority order)</h3>
+          <h3 className="text-lg font-medium text-text-primary mb-4">Rules (in priority order)</h3>
           <div className="space-y-2">
             {rules.map((rule, index) => (
               <div
                 key={index}
-                className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200"
+                className="flex items-center gap-3 p-4 bg-surface-raised rounded-lg border border-dark-border"
               >
                 <span className="flex-1">
-                  <span className="font-medium text-gray-800 capitalize">{rule.type}</span>
-                  {rule.type === 'pattern' && ` - ${rule.sequence.join(' → ')}`}
-                  {rule.type === 'conditional' && ` - ${rule.condition} (priority ${rule.priority})`}
-                  {rule.type === 'lookahead' && ` - Depth ${rule.depth}`}
-                  {rule.type === 'weighted' && ` - Weighted scoring`}
+                  <span className="font-medium text-text-primary capitalize">{rule.type}</span>
+                  <span className="text-text-muted">
+                    {rule.type === 'pattern' && ` - ${rule.sequence.join(' → ')}`}
+                    {rule.type === 'conditional' && ` - ${rule.condition} (priority ${rule.priority})`}
+                    {rule.type === 'lookahead' && ` - Depth ${rule.depth}`}
+                    {rule.type === 'weighted' && ' - Weighted scoring'}
+                  </span>
                 </span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleMoveRule(index, 'up')}
                     disabled={index === 0}
-                    className="px-2 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-30"
+                    className="px-2 py-1 text-sm bg-surface-elevated rounded border border-dark-border hover:bg-surface disabled:opacity-30"
                   >
                     ↑
                   </button>
                   <button
                     onClick={() => handleMoveRule(index, 'down')}
                     disabled={index === rules.length - 1}
-                    className="px-2 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-30"
+                    className="px-2 py-1 text-sm bg-surface-elevated rounded border border-dark-border hover:bg-surface disabled:opacity-30"
                   >
                     ↓
                   </button>
                   <button
                     onClick={() => handleRemoveRule(index)}
-                    className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200"
+                    className="px-3 py-1 text-sm bg-red-500/20 text-red-200 rounded hover:bg-red-500/30"
                   >
                     Remove
                   </button>
@@ -384,11 +372,11 @@ function WeightEditor({
   ];
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-gray-600">Adjust evaluation criteria weights:</p>
+    <div className="space-y-3 rounded-lg border border-dark-border bg-surface-raised p-4">
+      <p className="text-sm text-text-muted">Adjust evaluation criteria weights:</p>
       {weightConfig.map((config) => (
         <div key={config.key}>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-text-primary mb-1">
             {config.label}: {weights[config.key].toFixed(1)}
           </label>
           <input
@@ -398,7 +386,7 @@ function WeightEditor({
             min="0"
             max={config.max}
             step={config.step}
-            className="w-full"
+            className="w-full accent-accent"
           />
         </div>
       ))}

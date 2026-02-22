@@ -59,18 +59,30 @@ export function useSwipe({
     [enabled, onSwipe, threshold, maxTime]
   );
 
+  const handleTouchMove = useCallback(
+    (e: TouchEvent) => {
+      if (!enabled || !touchStart.current) return;
+      e.preventDefault();
+    },
+    [enabled]
+  );
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
     el.addEventListener('touchstart', handleTouchStart, { passive: true });
+    el.addEventListener('touchmove', handleTouchMove, { passive: false });
     el.addEventListener('touchend', handleTouchEnd, { passive: true });
+    el.addEventListener('touchcancel', handleTouchEnd, { passive: true });
 
     return () => {
       el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchmove', handleTouchMove);
       el.removeEventListener('touchend', handleTouchEnd);
+      el.removeEventListener('touchcancel', handleTouchEnd);
     };
-  }, [handleTouchStart, handleTouchEnd]);
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   return ref;
 }

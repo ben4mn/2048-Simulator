@@ -33,7 +33,7 @@ export const GameStats: React.FC<GameStatsProps> = ({
 
   const handleCopySeed = () => {
     if (!seed) return;
-    navigator.clipboard.writeText(seed);
+    void navigator.clipboard.writeText(seed);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -50,13 +50,13 @@ export const GameStats: React.FC<GameStatsProps> = ({
       {seed && (
         <button
           onClick={handleCopySeed}
-          className="flex flex-col items-center px-3 py-1.5 bg-surface-raised rounded-lg min-w-[60px] hover:bg-dark-border transition-colors"
+          className="flex flex-col items-center px-3 py-1.5 bg-surface-raised rounded-lg min-w-[60px] hover:bg-surface-elevated border border-dark-border transition-colors"
           title="Click to copy seed"
         >
-          <span className="text-[10px] uppercase tracking-wide text-gray-500">
+          <span className="text-[10px] uppercase tracking-wide text-text-muted">
             {copied ? 'Copied!' : 'Seed'}
           </span>
-          <span className="text-sm font-bold text-gray-200 font-mono">
+          <span className="text-sm font-bold text-text-primary font-mono">
             {seed}
           </span>
         </button>
@@ -70,10 +70,10 @@ const StatPill: React.FC<{ label: string; value: string; pop?: boolean }> = ({
   value,
   pop = false,
 }) => (
-  <div className="flex flex-col items-center px-3 py-1.5 bg-surface-raised rounded-lg min-w-[60px]">
-    <span className="text-[10px] uppercase tracking-wide text-gray-500">{label}</span>
+  <div className="flex flex-col items-center px-3 py-1.5 bg-surface-raised rounded-lg min-w-[60px] border border-dark-border">
+    <span className="text-[10px] uppercase tracking-wide text-text-muted">{label}</span>
     <span
-      className={`text-sm font-bold text-gray-200 ${pop ? 'animate-score-pop' : ''}`}
+      className={`text-sm font-bold text-text-primary ${pop ? 'animate-score-pop' : ''}`}
     >
       {value}
     </span>
