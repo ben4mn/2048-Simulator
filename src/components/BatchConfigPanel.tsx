@@ -88,8 +88,7 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
                 : 'border-dark-border bg-surface-raised hover:border-accent/60 hover:bg-surface-elevated'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">↗️</div>
+            <div className="flex items-start">
               <div className="flex-1">
                 <div className="font-semibold text-text-primary">Directional Priority</div>
                 <div className="text-xs text-text-muted mt-1">L→D→R→U order</div>
@@ -106,8 +105,7 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
                 : 'border-dark-border bg-surface-raised hover:border-accent/60 hover:bg-surface-elevated'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">📍</div>
+            <div className="flex items-start">
               <div className="flex-1">
                 <div className="font-semibold text-text-primary">Corner Anchor</div>
                 <div className="text-xs text-text-muted mt-1">Keep max in corner</div>
@@ -124,8 +122,7 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
                 : 'border-dark-border bg-surface-raised hover:border-accent/60 hover:bg-surface-elevated'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">🔗</div>
+            <div className="flex items-start">
               <div className="flex-1">
                 <div className="font-semibold text-text-primary">Merge Maximization</div>
                 <div className="text-xs text-text-muted mt-1">Prioritize merges</div>
@@ -142,8 +139,7 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
                 : 'border-dark-border bg-surface-raised hover:border-accent/60 hover:bg-surface-elevated'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">🎲</div>
+            <div className="flex items-start">
               <div className="flex-1">
                 <div className="font-semibold text-text-primary">Random</div>
                 <div className="text-xs text-text-muted mt-1">Baseline comparison</div>
@@ -160,8 +156,7 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
                 : 'border-dark-border bg-surface-raised hover:border-accent/60 hover:bg-surface-elevated'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">🔧</div>
+            <div className="flex items-start">
               <div className="flex-1">
                 <div className="font-semibold text-text-primary">Custom Strategy</div>
                 <div className="text-xs text-text-muted mt-1">Build your own with manual rules or AI assistance</div>
