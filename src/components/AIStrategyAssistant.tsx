@@ -18,7 +18,6 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
   const [error, setError] = useState<string | null>(null);
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
 
-  // Load API key from sessionStorage
   const loadApiKey = () => {
     const stored = sessionStorage.getItem(`ai_${provider}_key`);
     if (stored) {
@@ -41,7 +40,6 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
       return;
     }
 
-    // Check for API key
     let currentApiKey = apiKey;
     if (!currentApiKey) {
       const hasStoredKey = loadApiKey();
@@ -88,17 +86,16 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
 
   return (
     <div className="space-y-6">
-      <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
-        <h3 className="font-medium text-amber-900 mb-2">How to use AI Assistant</h3>
-        <p className="text-sm text-amber-800">
+      <div className="p-4 bg-amber-500/10 rounded-lg border border-accent/35">
+        <h3 className="font-medium text-accent mb-2">How to use AI Assistant</h3>
+        <p className="text-sm text-amber-100">
           Describe your desired 2048 strategy in natural language. The AI will convert it into
           executable rules. Be specific about behaviors, priorities, and conditions.
         </p>
       </div>
 
-      {/* Provider Selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">AI Provider</label>
+        <label className="block text-sm font-medium text-text-muted mb-2">AI Provider</label>
         <div className="flex gap-3">
           <button
             onClick={() => {
@@ -108,8 +105,8 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
             }}
             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
               provider === 'openai'
-                ? 'bg-amber-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                ? 'bg-accent text-gray-950'
+                : 'bg-surface-raised text-text-primary border border-dark-border hover:bg-surface-elevated'
             }`}
           >
             OpenAI
@@ -122,8 +119,8 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
             }}
             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
               provider === 'anthropic'
-                ? 'bg-amber-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                ? 'bg-accent text-gray-950'
+                : 'bg-surface-raised text-text-primary border border-dark-border hover:bg-surface-elevated'
             }`}
           >
             Anthropic
@@ -131,13 +128,12 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
         </div>
       </div>
 
-      {/* API Key Configuration */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-gray-700">API Key</label>
+          <label className="block text-sm font-medium text-text-muted">API Key</label>
           <button
             onClick={() => setShowApiKeyInput(!showApiKeyInput)}
-            className="text-sm text-amber-600 hover:text-amber-800 font-medium"
+            className="text-sm text-accent hover:text-amber-300 font-medium"
           >
             {showApiKeyInput ? 'Hide' : sessionStorage.getItem(`ai_${provider}_key`) ? 'Change' : 'Configure'}
           </button>
@@ -150,28 +146,27 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={`Enter your ${provider === 'openai' ? 'OpenAI' : 'Anthropic'} API key`}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-lg focus:ring-2 focus:ring-accent focus:border-accent"
             />
             <button
               onClick={saveApiKey}
-              className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+              className="w-full px-4 py-2 bg-surface-elevated text-text-primary rounded-lg border border-dark-border hover:bg-surface"
             >
               Save API Key (session only)
             </button>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-text-muted">
               Your API key is stored in session storage and will be cleared when you close the browser.
             </p>
           </div>
         )}
 
         {!showApiKeyInput && sessionStorage.getItem(`ai_${provider}_key`) && (
-          <p className="text-sm text-green-600">✓ API key configured</p>
+          <p className="text-sm text-success">✓ API key configured</p>
         )}
       </div>
 
-      {/* Strategy Description */}
       <div>
-        <label htmlFor="ai-description" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="ai-description" className="block text-sm font-medium text-text-muted mb-2">
           Strategy Description
         </label>
         <textarea
@@ -180,19 +175,18 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Describe your strategy... e.g., 'I want the AI to prioritize keeping the highest tile in the bottom-left corner and only move up as a last resort'"
           rows={6}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+          className="w-full px-4 py-3 border border-dark-border bg-surface-raised text-text-primary rounded-lg focus:ring-2 focus:ring-accent focus:border-accent resize-none"
         />
       </div>
 
-      {/* Example Prompts */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Example Prompts</label>
+        <label className="block text-sm font-medium text-text-muted mb-2">Example Prompts</label>
         <div className="space-y-2">
           {examplePrompts.map((prompt, index) => (
             <button
               key={index}
               onClick={() => setDescription(prompt)}
-              className="w-full text-left px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors"
+              className="w-full text-left px-4 py-2 bg-surface-raised hover:bg-surface-elevated rounded-lg text-sm text-text-primary border border-dark-border transition-colors"
             >
               {prompt}
             </button>
@@ -200,23 +194,21 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
         </div>
       </div>
 
-      {/* Error Display */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-800">{error}</p>
+        <div className="p-4 bg-red-500/10 border border-danger/35 rounded-lg">
+          <p className="text-sm text-red-100">{error}</p>
         </div>
       )}
 
-      {/* Generate Button */}
       <button
         onClick={handleGenerate}
         disabled={isGenerating || !description.trim()}
-        className="w-full px-6 py-3 bg-amber-600 text-white font-medium rounded-lg hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+        className="w-full px-6 py-3 bg-accent text-gray-950 font-semibold rounded-lg hover:bg-accent-strong disabled:bg-surface disabled:text-text-muted disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
       >
         {isGenerating ? (
           <>
             <svg
-              className="animate-spin h-5 w-5 text-white"
+              className="animate-spin h-5 w-5 text-gray-900"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -242,10 +234,9 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
         )}
       </button>
 
-      {/* Info Note */}
-      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <p className="text-sm text-gray-600">
-          <strong>Note:</strong> The AI will analyze your description and create a combination of
+      <div className="p-4 bg-surface-raised rounded-lg border border-dark-border">
+        <p className="text-sm text-text-muted">
+          <strong className="text-text-primary">Note:</strong> The AI will analyze your description and create a combination of
           rules (pattern-based, conditional, look-ahead, or weighted). You can review and edit the
           generated rules in the Manual Builder tab before saving.
         </p>

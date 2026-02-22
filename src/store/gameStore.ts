@@ -8,7 +8,24 @@ import { generateSeed } from '../engine/rng';
 import type { GameState, Direction, GameResult } from '../engine/types';
 import type { SimulationJob, SimulationProgress } from '../workers/simulationWorker';
 import { db } from '../storage/db';
-import type { Strategy } from '../storage/db';
+import type { Batch, Strategy } from '../storage/db';
+
+const MAX_COMPLETED_BATCHES = 10;
+
+const STRATEGY_LABELS: Record<string, string> = {
+  directional_priority: 'Directional Priority',
+  corner_anchor: 'Corner Anchor',
+  merge_max: 'Merge Maximization',
+  random: 'Random',
+  custom: 'Custom Strategy',
+};
+
+const getStrategyName = (strategyType: string, customName?: string) => {
+  if (strategyType === 'custom') {
+    return customName || 'Custom Strategy';
+  }
+  return STRATEGY_LABELS[strategyType] || strategyType;
+};
 
 interface GameStore {
   // Current game instance
@@ -26,6 +43,8 @@ interface GameStore {
   batchProgress: number;
   batchTotal: number;
   currentBatchId: string | null;
+  recentBatches: Batch[];
+  selectedBatchId: string | null;
   worker: Worker | null;
 
   // Batch methods
@@ -39,7 +58,8 @@ interface GameStore {
     customStrategyName?: string;
   }) => void;
   stopBatchSimulation: () => void;
-  loadAllResults: () => Promise<void>;
+  loadRecentBatches: () => Promise<void>;
+  selectBatch: (batchId: string | null) => Promise<void>;
 
   // Saved strategies
   savedStrategies: Strategy[];
@@ -66,6 +86,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   batchProgress: 0,
   batchTotal: 0,
   currentBatchId: null,
+  recentBatches: [],
+  selectedBatchId: null,
   worker: null,
   selectedGameId: null,
   viewMode: 'play',
@@ -74,7 +96,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // Initialize database and load existing results
   initialize: async () => {
     await db.init();
-    await get().loadAllResults();
+    await db.pruneCompletedBatches(MAX_COMPLETED_BATCHES);
+    await get().loadRecentBatches();
     await get().loadSavedStrategies();
   },
 
@@ -135,17 +158,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const batchId = `batch_${Date.now()}`;
     const strategyId = `${config.strategyType}_${Date.now()}`;
     const jobId = `job_${Date.now()}`;
+    const strategyName = getStrategyName(config.strategyType, config.customStrategyName);
+    const createdAt = new Date().toISOString();
 
-    // Save batch to DB
-    db.saveBatch({
+    const runningBatch: Batch = {
       id: batchId,
       strategyIds: [strategyId],
       gameCount: config.batchSize,
       status: 'running',
+      strategyType: config.strategyType,
+      strategyName,
       seedMode: config.seedMode,
       seeds,
-      createdAt: new Date().toISOString(),
-    });
+      createdAt,
+    };
+
+    void db.saveBatch(runningBatch);
 
     // Create and start worker
     const worker = new Worker(
@@ -164,32 +192,34 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       // Save results to DB
       if (progress.results.length > 0) {
-        db.saveGames(progress.results);
+        void db.saveGames(progress.results);
       }
 
       // If completed
       if (progress.completed === progress.total) {
+        worker.terminate();
+
         set({
           isRunningBatch: false,
-          batchResults: progress.results,
+          currentBatchId: null,
+          selectedBatchId: batchId,
+          selectedGameId: null,
+          batchResults: progress.results.slice(),
           viewMode: 'results',
+          worker: null,
         });
 
-        // Update batch status
-        db.saveBatch({
-          id: batchId,
-          strategyIds: [strategyId],
-          gameCount: config.batchSize,
-          status: 'complete',
-          seedMode: config.seedMode,
-          seeds,
-          createdAt: new Date().toISOString(),
-          completedAt: new Date().toISOString(),
-        });
-
-        // Cleanup worker
-        worker.terminate();
-        set({ worker: null });
+        void (async () => {
+          await db.saveGames(progress.results);
+          const completedAt = new Date().toISOString();
+          await db.saveBatch({
+            ...runningBatch,
+            status: 'complete',
+            completedAt,
+          });
+          await db.pruneCompletedBatches(MAX_COMPLETED_BATCHES);
+          await get().loadRecentBatches();
+        })();
       }
     };
 
@@ -214,6 +244,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       batchTotal: config.batchSize,
       currentBatchId: batchId,
       batchResults: [],
+      selectedGameId: null,
     });
   },
 
@@ -222,23 +253,66 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { worker, currentBatchId } = get();
     if (worker) {
       worker.terminate();
-      set({ worker: null, isRunningBatch: false });
+      set({
+        worker: null,
+        isRunningBatch: false,
+        currentBatchId: null,
+        batchProgress: 0,
+      });
 
       // Update batch status to failed
       if (currentBatchId) {
-        db.getBatch(currentBatchId).then((batch) => {
+        void db.getBatch(currentBatchId).then((batch) => {
           if (batch) {
-            db.saveBatch({ ...batch, status: 'failed' });
+            return db.saveBatch({ ...batch, status: 'failed' });
           }
         });
       }
     }
   },
 
-  // Load all results from DB
-  loadAllResults: async () => {
-    const games = await db.getAllGames();
-    set({ batchResults: games });
+  // Load recent completed batches and selected batch results
+  loadRecentBatches: async () => {
+    const recentBatches = await db.getCompletedBatches(MAX_COMPLETED_BATCHES);
+    const currentSelected = get().selectedBatchId;
+    const selectedBatchId =
+      currentSelected && recentBatches.some((batch) => batch.id === currentSelected)
+        ? currentSelected
+        : (recentBatches[0]?.id || null);
+
+    const batchResults = selectedBatchId
+      ? await db.getGamesByBatch(selectedBatchId)
+      : [];
+    const selectedGameId = get().selectedGameId;
+    const nextSelectedGameId =
+      selectedGameId && batchResults.some((result) => result.id === selectedGameId)
+        ? selectedGameId
+        : null;
+
+    set({
+      recentBatches,
+      selectedBatchId,
+      batchResults,
+      selectedGameId: nextSelectedGameId,
+    });
+  },
+
+  selectBatch: async (batchId) => {
+    if (!batchId) {
+      set({
+        selectedBatchId: null,
+        batchResults: [],
+        selectedGameId: null,
+      });
+      return;
+    }
+
+    const batchResults = await db.getGamesByBatch(batchId);
+    set({
+      selectedBatchId: batchId,
+      batchResults,
+      selectedGameId: null,
+    });
   },
 
   // Saved strategies

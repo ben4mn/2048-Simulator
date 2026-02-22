@@ -13,6 +13,8 @@ export interface Batch {
   strategyIds: string[];
   gameCount: number;
   status: 'pending' | 'running' | 'complete' | 'failed';
+  strategyType?: string;
+  strategyName?: string;
   seedMode: 'random' | 'fixed' | 'shared';
   seeds: string[];
   createdAt: string;
@@ -167,6 +169,68 @@ class Database {
       };
       request.onerror = () => reject(request.error);
     });
+  }
+
+  async getCompletedBatches(limit?: number): Promise<Batch[]> {
+    const allBatches = await this.getAllBatches();
+    const completed = allBatches
+      .filter((batch) => batch.status === 'complete')
+      .sort((a, b) => {
+        const aTime = new Date(a.completedAt || a.createdAt).getTime();
+        const bTime = new Date(b.completedAt || b.createdAt).getTime();
+        return bTime - aTime;
+      });
+
+    return typeof limit === 'number' ? completed.slice(0, limit) : completed;
+  }
+
+  async deleteBatch(id: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore('batches', 'readwrite');
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async deleteGamesByBatch(batchId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore('games', 'readwrite');
+      const index = store.index('batchId');
+      const request = index.getAllKeys(IDBKeyRange.only(batchId));
+
+      request.onsuccess = () => {
+        const keys = request.result;
+        if (keys.length === 0) {
+          resolve();
+          return;
+        }
+
+        let deleted = 0;
+        keys.forEach((key) => {
+          const deleteRequest = store.delete(key);
+          deleteRequest.onsuccess = () => {
+            deleted++;
+            if (deleted === keys.length) {
+              resolve();
+            }
+          };
+          deleteRequest.onerror = () => reject(deleteRequest.error);
+        });
+      };
+
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async pruneCompletedBatches(maxCount: number): Promise<void> {
+    const completedBatches = await this.getCompletedBatches();
+    const batchesToDelete = completedBatches.slice(maxCount);
+
+    for (const batch of batchesToDelete) {
+      await this.deleteGamesByBatch(batch.id);
+      await this.deleteBatch(batch.id);
+    }
   }
 
   // Strategy operations

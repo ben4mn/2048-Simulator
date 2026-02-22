@@ -10,7 +10,7 @@ import type { DirectionShort, GameState } from '../engine/types';
 
 interface GameReplayProps {
   seed: string;
-  moves: string; // e.g., "LDLDRRUU..."
+  moves: string;
   onClose: () => void;
 }
 
@@ -18,18 +18,16 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
   const [currentMove, setCurrentMove] = useState(0);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState(500); // ms per move
+  const [speed, setSpeed] = useState(500);
 
   const moveArray = moves.split('') as DirectionShort[];
   const totalMoves = moveArray.length;
 
-  // Initialize game engine
   useEffect(() => {
     const engine = new GameEngine(seed);
     setGameState(engine.getState());
   }, [seed]);
 
-  // Apply moves up to current position
   const updateGameState = useCallback(
     (moveIndex: number) => {
       const engine = new GameEngine(seed);
@@ -44,12 +42,10 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
     [seed, moveArray, totalMoves]
   );
 
-  // Update game state when current move changes
   useEffect(() => {
     updateGameState(currentMove);
   }, [currentMove, updateGameState]);
 
-  // Auto-play functionality
   useEffect(() => {
     if (!isPlaying) return;
 
@@ -94,52 +90,47 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
   };
 
   if (!gameState) {
-    return <div className="text-gray-400">Loading...</div>;
+    return <div className="text-text-muted">Loading...</div>;
   }
 
   return (
-    <div className="fixed inset-0 z-50 md:bg-black/60 md:flex md:items-center md:justify-center md:p-4 bg-dark-bg">
-      <div className="h-full md:h-auto md:max-w-2xl md:w-full md:rounded-xl bg-dark-bg md:bg-surface flex flex-col">
-        {/* Header */}
+    <div className="fixed inset-0 z-50 md:bg-black/70 md:flex md:items-center md:justify-center md:p-4 bg-app-bg">
+      <div className="h-full md:h-auto md:max-w-2xl md:w-full md:rounded-xl bg-app-bg md:bg-surface border border-dark-border flex flex-col shadow-2xl">
         <div className="flex items-center justify-between p-4 shrink-0">
-          <h2 className="text-xl font-bold text-white">Game Replay</h2>
+          <h2 className="text-xl font-bold text-text-primary">Game Replay</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-2xl font-bold w-8 h-8 flex items-center justify-center"
+            className="text-text-muted hover:text-text-primary text-2xl font-bold w-8 h-8 flex items-center justify-center"
           >
             ×
           </button>
         </div>
 
-        {/* Game Info */}
         <div className="grid grid-cols-3 gap-3 px-4 mb-3 shrink-0">
-          <div className="bg-surface-raised rounded-lg p-2 text-center">
-            <div className="text-[10px] uppercase tracking-wide text-gray-500">Score</div>
-            <div className="text-lg font-bold text-gray-200">{gameState.score.toLocaleString()}</div>
+          <div className="bg-surface-raised rounded-lg p-2 text-center border border-dark-border">
+            <div className="text-[10px] uppercase tracking-wide text-text-muted">Score</div>
+            <div className="text-lg font-bold text-text-primary">{gameState.score.toLocaleString()}</div>
           </div>
-          <div className="bg-surface-raised rounded-lg p-2 text-center">
-            <div className="text-[10px] uppercase tracking-wide text-gray-500">Max Tile</div>
-            <div className="text-lg font-bold text-gray-200">{gameState.maxTile}</div>
+          <div className="bg-surface-raised rounded-lg p-2 text-center border border-dark-border">
+            <div className="text-[10px] uppercase tracking-wide text-text-muted">Max Tile</div>
+            <div className="text-lg font-bold text-text-primary">{gameState.maxTile}</div>
           </div>
-          <div className="bg-surface-raised rounded-lg p-2 text-center">
-            <div className="text-[10px] uppercase tracking-wide text-gray-500">Seed</div>
-            <div className="text-sm font-mono font-bold text-gray-200">{seed}</div>
+          <div className="bg-surface-raised rounded-lg p-2 text-center border border-dark-border">
+            <div className="text-[10px] uppercase tracking-wide text-text-muted">Seed</div>
+            <div className="text-sm font-mono font-bold text-text-primary">{seed}</div>
           </div>
         </div>
 
-        {/* Game Board — fills remaining space */}
         <div className="flex-1 flex items-center justify-center px-4 mb-3 min-h-0">
           <GameBoard board={gameState.board} size="responsive" />
         </div>
 
-        {/* Move Counter */}
         <div className="text-center mb-2 shrink-0">
-          <div className="text-sm text-gray-400">
+          <div className="text-sm text-text-muted">
             Move {currentMove} of {totalMoves}
           </div>
         </div>
 
-        {/* Timeline Slider */}
         <div className="px-4 mb-3 shrink-0">
           <input
             type="range"
@@ -147,60 +138,58 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
             max={totalMoves}
             value={currentMove}
             onChange={(e) => handleJumpTo(Number(e.target.value))}
-            className="w-full accent-amber-500"
+            className="w-full accent-accent"
           />
         </div>
 
-        {/* Controls */}
         <div className="flex items-center justify-center gap-2 mb-3 shrink-0">
           <button
             onClick={handleReset}
-            className="px-4 py-2 bg-surface-raised hover:bg-dark-border text-gray-300 rounded-md"
+            className="px-4 py-2 bg-surface-raised hover:bg-surface-elevated text-text-primary rounded-md border border-dark-border"
             title="Reset to start"
           >
             ⏮
           </button>
           <button
             onClick={handleStepBack}
-            className="px-4 py-2 bg-surface-raised hover:bg-dark-border text-gray-300 rounded-md"
+            className="px-4 py-2 bg-surface-raised hover:bg-surface-elevated text-text-primary rounded-md border border-dark-border"
             title="Step back"
           >
             ⏪
           </button>
           <button
             onClick={handlePlayPause}
-            className="px-6 py-2 bg-amber-500 hover:bg-amber-400 text-gray-900 rounded-md font-semibold"
+            className="px-6 py-2 bg-accent hover:bg-accent-strong text-gray-950 rounded-md font-semibold"
           >
             {isPlaying ? '⏸ Pause' : '▶ Play'}
           </button>
           <button
             onClick={handleStepForward}
-            className="px-4 py-2 bg-surface-raised hover:bg-dark-border text-gray-300 rounded-md"
+            className="px-4 py-2 bg-surface-raised hover:bg-surface-elevated text-text-primary rounded-md border border-dark-border"
             title="Step forward"
           >
             ⏩
           </button>
         </div>
 
-        {/* Speed Control */}
         <div className="flex items-center justify-center gap-3 pb-4 shrink-0">
-          <label className="text-sm text-gray-400">Speed:</label>
+          <label className="text-sm text-text-muted">Speed:</label>
           {[
             { label: '0.5x', value: 1000 },
             { label: '1x', value: 500 },
             { label: '2x', value: 250 },
             { label: '5x', value: 100 },
-          ].map((s) => (
+          ].map((setting) => (
             <button
-              key={s.value}
-              onClick={() => setSpeed(s.value)}
-              className={`px-3 py-1 text-sm rounded-full ${
-                speed === s.value
-                  ? 'bg-amber-500 text-gray-900'
-                  : 'bg-surface-raised text-gray-300'
+              key={setting.value}
+              onClick={() => setSpeed(setting.value)}
+              className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                speed === setting.value
+                  ? 'bg-accent text-gray-950'
+                  : 'bg-surface-raised text-text-primary border border-dark-border hover:bg-surface-elevated'
               }`}
             >
-              {s.label}
+              {setting.label}
             </button>
           ))}
         </div>

@@ -6,7 +6,24 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['"Space Grotesk"', '"Avenir Next"', 'Avenir', '"Segoe UI"', 'sans-serif'],
+        mono: ['"JetBrains Mono"', '"SFMono-Regular"', 'Menlo', 'Monaco', 'monospace'],
+      },
       colors: {
+        app: {
+          bg: 'var(--color-bg)',
+        },
+        text: {
+          primary: 'var(--color-text-primary)',
+          muted: 'var(--color-text-muted)',
+        },
+        accent: {
+          DEFAULT: 'var(--color-accent)',
+          strong: 'var(--color-accent-strong)',
+        },
+        success: 'var(--color-success)',
+        danger: 'var(--color-danger)',
         tile: {
           2: '#eee4da',
           4: '#ede0c8',
@@ -21,13 +38,14 @@ export default {
           2048: '#edc22e',
         },
         surface: {
-          DEFAULT: '#1a1d28',
-          raised: '#242836',
-          overlay: 'rgba(0, 0, 0, 0.6)',
+          DEFAULT: 'var(--color-surface)',
+          raised: 'var(--color-surface-raised)',
+          elevated: 'var(--color-surface-elevated)',
+          overlay: 'rgba(5, 7, 11, 0.7)',
         },
         dark: {
-          bg: '#0f1117',
-          border: '#2d3348',
+          bg: 'var(--color-bg)',
+          border: 'var(--color-border)',
         },
       },
       animation: {

@@ -57,7 +57,7 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
     setCustomRules(rules);
     setCustomStrategyName(name);
     setShowCustomBuilder(false);
-    saveCustomStrategy(name, rules);
+    void saveCustomStrategy(name, rules);
   };
 
   const handleLoadSavedStrategy = (strategy: { name: string; params: { customRules: CustomRule[] } }) => {
@@ -72,108 +72,102 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
 
   return (
     <div className="bg-surface rounded-xl shadow-lg p-6 space-y-6 border border-dark-border">
-      <h2 className="text-2xl font-bold text-white">Batch Simulation</h2>
+      <h2 className="text-2xl font-bold text-text-primary">Batch Simulation</h2>
 
-      {/* Strategy Selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-3">
+        <label className="block text-sm font-medium text-text-muted mb-3">
           Choose Strategy
         </label>
         <div className="grid grid-cols-2 gap-3">
-          {/* Directional Priority Card */}
           <button
             onClick={() => setStrategyType('directional_priority')}
             disabled={isRunning}
-            className={`p-4 rounded-lg border-2 text-left transition-all ${
+            className={`p-4 rounded-xl border-2 text-left transition-all ${
               strategyType === 'directional_priority'
-                ? 'border-amber-500 bg-amber-500/10'
-                : 'border-dark-border bg-surface-raised hover:border-amber-500/50'
+                ? 'border-accent bg-amber-500/15'
+                : 'border-dark-border bg-surface-raised hover:border-accent/60 hover:bg-surface-elevated'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <div className="flex items-start gap-3">
               <div className="text-2xl">↗️</div>
               <div className="flex-1">
-                <div className="font-semibold text-white">Directional Priority</div>
-                <div className="text-xs text-gray-400 mt-1">L→D→R→U order</div>
+                <div className="font-semibold text-text-primary">Directional Priority</div>
+                <div className="text-xs text-text-muted mt-1">L→D→R→U order</div>
               </div>
             </div>
           </button>
 
-          {/* Corner Anchor Card */}
           <button
             onClick={() => setStrategyType('corner_anchor')}
             disabled={isRunning}
-            className={`p-4 rounded-lg border-2 text-left transition-all ${
+            className={`p-4 rounded-xl border-2 text-left transition-all ${
               strategyType === 'corner_anchor'
-                ? 'border-amber-500 bg-amber-500/10'
-                : 'border-dark-border bg-surface-raised hover:border-amber-500/50'
+                ? 'border-accent bg-amber-500/15'
+                : 'border-dark-border bg-surface-raised hover:border-accent/60 hover:bg-surface-elevated'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <div className="flex items-start gap-3">
               <div className="text-2xl">📍</div>
               <div className="flex-1">
-                <div className="font-semibold text-white">Corner Anchor</div>
-                <div className="text-xs text-gray-400 mt-1">Keep max in corner</div>
+                <div className="font-semibold text-text-primary">Corner Anchor</div>
+                <div className="text-xs text-text-muted mt-1">Keep max in corner</div>
               </div>
             </div>
           </button>
 
-          {/* Merge Maximization Card */}
           <button
             onClick={() => setStrategyType('merge_max')}
             disabled={isRunning}
-            className={`p-4 rounded-lg border-2 text-left transition-all ${
+            className={`p-4 rounded-xl border-2 text-left transition-all ${
               strategyType === 'merge_max'
-                ? 'border-amber-500 bg-amber-500/10'
-                : 'border-dark-border bg-surface-raised hover:border-amber-500/50'
+                ? 'border-accent bg-amber-500/15'
+                : 'border-dark-border bg-surface-raised hover:border-accent/60 hover:bg-surface-elevated'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <div className="flex items-start gap-3">
               <div className="text-2xl">🔗</div>
               <div className="flex-1">
-                <div className="font-semibold text-white">Merge Maximization</div>
-                <div className="text-xs text-gray-400 mt-1">Prioritize merges</div>
+                <div className="font-semibold text-text-primary">Merge Maximization</div>
+                <div className="text-xs text-text-muted mt-1">Prioritize merges</div>
               </div>
             </div>
           </button>
 
-          {/* Random Card */}
           <button
             onClick={() => setStrategyType('random')}
             disabled={isRunning}
-            className={`p-4 rounded-lg border-2 text-left transition-all ${
+            className={`p-4 rounded-xl border-2 text-left transition-all ${
               strategyType === 'random'
-                ? 'border-amber-500 bg-amber-500/10'
-                : 'border-dark-border bg-surface-raised hover:border-amber-500/50'
+                ? 'border-accent bg-amber-500/15'
+                : 'border-dark-border bg-surface-raised hover:border-accent/60 hover:bg-surface-elevated'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <div className="flex items-start gap-3">
               <div className="text-2xl">🎲</div>
               <div className="flex-1">
-                <div className="font-semibold text-white">Random</div>
-                <div className="text-xs text-gray-400 mt-1">Baseline comparison</div>
+                <div className="font-semibold text-text-primary">Random</div>
+                <div className="text-xs text-text-muted mt-1">Baseline comparison</div>
               </div>
             </div>
           </button>
 
-          {/* Custom Card - Full Width */}
           <button
             onClick={() => setStrategyType('custom')}
             disabled={isRunning}
-            className={`col-span-2 p-4 rounded-lg border-2 text-left transition-all ${
+            className={`col-span-2 p-4 rounded-xl border-2 text-left transition-all ${
               strategyType === 'custom'
-                ? 'border-amber-500 bg-amber-500/10'
-                : 'border-dark-border bg-surface-raised hover:border-amber-500/50'
+                ? 'border-accent bg-amber-500/15'
+                : 'border-dark-border bg-surface-raised hover:border-accent/60 hover:bg-surface-elevated'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <div className="flex items-start gap-3">
               <div className="text-2xl">🔧</div>
               <div className="flex-1">
-                <div className="font-semibold text-white">Custom Strategy</div>
-                <div className="text-xs text-gray-400 mt-1">Build your own with manual rules or AI assistance</div>
+                <div className="font-semibold text-text-primary">Custom Strategy</div>
+                <div className="text-xs text-text-muted mt-1">Build your own with manual rules or AI assistance</div>
               </div>
               {customRules.length > 0 && (
-                <div className="px-3 py-1 bg-amber-500 text-gray-900 text-xs font-medium rounded-full">
+                <div className="px-3 py-1 bg-accent text-gray-950 text-xs font-semibold rounded-full">
                   {customRules.length} rule{customRules.length !== 1 ? 's' : ''}
                 </div>
               )}
@@ -182,33 +176,32 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
         </div>
       </div>
 
-      {/* Custom Strategy Builder Action */}
       {strategyType === 'custom' && !showCustomBuilder && (
-        <div className="p-4 bg-amber-500/10 rounded-lg border border-amber-500/30">
+        <div className="p-4 bg-amber-500/10 rounded-xl border border-accent/35">
           {customRules.length > 0 ? (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-amber-400">{customStrategyName}</h3>
+                <h3 className="font-semibold text-accent">{customStrategyName}</h3>
                 <button
                   onClick={() => setShowCustomBuilder(true)}
-                  className="text-sm text-amber-500 hover:text-amber-400 font-medium"
+                  className="text-sm text-accent hover:text-amber-300 font-medium"
                 >
                   Edit Rules
                 </button>
               </div>
-              <p className="text-sm text-amber-300/70">
+              <p className="text-sm text-amber-200/80">
                 {customRules.length} rule{customRules.length !== 1 ? 's' : ''} configured
               </p>
             </div>
           ) : (
             <div>
-              <p className="text-sm text-amber-300/70 mb-3">
+              <p className="text-sm text-amber-200/80 mb-3">
                 Create your own custom strategy using manual rules or AI assistance
               </p>
               <button
                 onClick={() => setShowCustomBuilder(true)}
                 disabled={isRunning}
-                className="px-4 py-2 bg-amber-500 text-gray-900 rounded-lg hover:bg-amber-400 disabled:opacity-50 font-medium"
+                className="px-4 py-2 bg-accent text-gray-950 rounded-lg hover:bg-accent-strong disabled:opacity-50 font-semibold transition-colors"
               >
                 Build Custom Strategy
               </button>
@@ -217,17 +210,14 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
         </div>
       )}
 
-      {/* Side Panel for Custom Strategy Builder */}
       {showCustomBuilder && (
         <>
-          {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black bg-opacity-30 z-40 transition-opacity"
+            className="fixed inset-0 bg-black/70 z-40 transition-opacity"
             onClick={handleCancelCustomBuilder}
           />
 
-          {/* Side Panel */}
-          <div className="fixed right-0 top-0 bottom-0 w-full md:w-[600px] bg-white shadow-2xl z-50 overflow-y-auto transform transition-transform">
+          <div className="fixed right-0 top-0 bottom-0 w-full md:w-[640px] bg-surface-elevated border-l border-dark-border shadow-2xl z-50 overflow-y-auto transform transition-transform">
             <CustomStrategyBuilder
               onSave={handleSaveCustomStrategy}
               onCancel={handleCancelCustomBuilder}
@@ -238,28 +228,27 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
         </>
       )}
 
-      {/* Saved Custom Strategies */}
       {strategyType === 'custom' && savedStrategies.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-medium text-gray-300">Saved Strategies</h3>
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {savedStrategies.map((s) => (
+          <h3 className="text-sm font-medium text-text-muted">Saved Strategies</h3>
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {savedStrategies.map((strategy) => (
               <div
-                key={s.id}
+                key={strategy.id}
                 className="flex items-center justify-between p-3 bg-surface-raised rounded-lg border border-dark-border"
               >
                 <button
-                  onClick={() => handleLoadSavedStrategy(s as any)}
+                  onClick={() => handleLoadSavedStrategy(strategy as any)}
                   className="flex-1 text-left"
                 >
-                  <div className="font-medium text-white text-sm">{s.name}</div>
-                  <div className="text-xs text-gray-500">
-                    {(s.params.customRules as any[])?.length || 0} rule{(s.params.customRules as any[])?.length !== 1 ? 's' : ''}
+                  <div className="font-medium text-text-primary text-sm">{strategy.name}</div>
+                  <div className="text-xs text-text-muted">
+                    {(strategy.params.customRules as any[])?.length || 0} rule{(strategy.params.customRules as any[])?.length !== 1 ? 's' : ''}
                   </div>
                 </button>
                 <button
-                  onClick={() => deleteCustomStrategy(s.id)}
-                  className="ml-2 p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                  onClick={() => void deleteCustomStrategy(strategy.id)}
+                  className="ml-2 p-1.5 text-danger hover:text-red-200 hover:bg-red-500/15 rounded transition-colors"
                   title="Delete strategy"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -272,17 +261,16 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
         </div>
       )}
 
-      {/* Corner selection for Corner Anchor strategy */}
       {strategyType === 'corner_anchor' && (
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-text-muted mb-2">
             Corner Position
           </label>
           <select
             value={corner}
             onChange={(e) => setCorner(e.target.value)}
             disabled={isRunning}
-            className="w-full px-3 py-2 border border-dark-border bg-surface-raised text-white rounded-md focus:ring-2 focus:ring-amber-500"
+            className="w-full px-3 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-md focus:ring-2 focus:ring-accent"
           >
             <option value="bottom-left">Bottom Left</option>
             <option value="bottom-right">Bottom Right</option>
@@ -292,9 +280,8 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
         </div>
       )}
 
-      {/* Batch Size */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-text-muted mb-2">
           Number of Games
         </label>
         <input
@@ -304,14 +291,13 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
           disabled={isRunning}
           min={1}
           max={10000}
-          className="w-full px-3 py-2 border border-dark-border bg-surface-raised text-white rounded-md focus:ring-2 focus:ring-amber-500"
+          className="w-full px-3 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-md focus:ring-2 focus:ring-accent"
         />
-        <p className="text-xs text-gray-500 mt-1">Min: 1, Max: 10,000</p>
+        <p className="text-xs text-text-muted mt-1">Min: 1, Max: 10,000</p>
       </div>
 
-      {/* Seed Mode */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-text-muted mb-2">
           Seed Mode
         </label>
         <div className="space-y-2">
@@ -323,11 +309,11 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
               checked={seedMode === 'random'}
               onChange={() => setSeedMode('random')}
               disabled={isRunning}
-              className="mt-1 mr-2 accent-amber-500"
+              className="mt-1 mr-2 accent-accent"
             />
             <div>
-              <div className="font-medium text-white">Random</div>
-              <div className="text-xs text-gray-400">
+              <div className="font-medium text-text-primary">Random</div>
+              <div className="text-xs text-text-muted">
                 Each game gets a unique random seed
               </div>
             </div>
@@ -340,11 +326,11 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
               checked={seedMode === 'fixed'}
               onChange={() => setSeedMode('fixed')}
               disabled={isRunning}
-              className="mt-1 mr-2 accent-amber-500"
+              className="mt-1 mr-2 accent-accent"
             />
             <div>
-              <div className="font-medium text-white">Fixed</div>
-              <div className="text-xs text-gray-400">
+              <div className="font-medium text-text-primary">Fixed</div>
+              <div className="text-xs text-text-muted">
                 All games use the same seed (test consistency)
               </div>
             </div>
@@ -357,11 +343,11 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
               checked={seedMode === 'shared'}
               onChange={() => setSeedMode('shared')}
               disabled={isRunning}
-              className="mt-1 mr-2 accent-amber-500"
+              className="mt-1 mr-2 accent-accent"
             />
             <div>
-              <div className="font-medium text-white">Shared</div>
-              <div className="text-xs text-gray-400">
+              <div className="font-medium text-text-primary">Shared</div>
+              <div className="text-xs text-text-muted">
                 Generate seeds for head-to-head comparison
               </div>
             </div>
@@ -369,10 +355,9 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
         </div>
       </div>
 
-      {/* Fixed Seed Input */}
       {seedMode === 'fixed' && (
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-text-muted mb-2">
             Seed
           </label>
           <div className="flex gap-2">
@@ -382,13 +367,13 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
               onChange={(e) => setFixedSeed(e.target.value.toUpperCase())}
               disabled={isRunning}
               maxLength={8}
-              className="flex-1 px-3 py-2 border border-dark-border bg-surface-raised text-white rounded-md font-mono focus:ring-2 focus:ring-amber-500"
+              className="flex-1 px-3 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-md font-mono focus:ring-2 focus:ring-accent"
               placeholder="A7X9K2M1"
             />
             <button
               onClick={() => setFixedSeed(generateSeed())}
               disabled={isRunning}
-              className="px-3 py-2 bg-surface-raised hover:bg-dark-border text-gray-300 rounded-md text-sm disabled:opacity-50 border border-dark-border"
+              className="px-3 py-2 bg-surface-raised hover:bg-surface-elevated text-text-primary rounded-md text-sm disabled:opacity-50 border border-dark-border"
             >
               Random
             </button>
@@ -396,11 +381,10 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
         </div>
       )}
 
-      {/* Start Button */}
       <button
         onClick={handleStart}
         disabled={isRunning}
-        className="w-full px-6 py-3 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold rounded-lg shadow-lg shadow-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full px-6 py-3 bg-accent hover:bg-accent-strong text-gray-950 font-bold rounded-lg shadow-lg shadow-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isRunning ? 'Running...' : 'Start Batch Simulation'}
       </button>
