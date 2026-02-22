@@ -20,6 +20,7 @@ export function useSwipe({
   const handleTouchStart = useCallback(
     (e: TouchEvent) => {
       if (!enabled) return;
+      e.preventDefault();
       const touch = e.touches[0];
       touchStart.current = {
         x: touch.clientX,
@@ -61,7 +62,7 @@ export function useSwipe({
 
   const handleTouchMove = useCallback(
     (e: TouchEvent) => {
-      if (!enabled || !touchStart.current) return;
+      if (!enabled) return;
       e.preventDefault();
     },
     [enabled]
@@ -71,7 +72,7 @@ export function useSwipe({
     const el = ref.current;
     if (!el) return;
 
-    el.addEventListener('touchstart', handleTouchStart, { passive: true });
+    el.addEventListener('touchstart', handleTouchStart, { passive: false });
     el.addEventListener('touchmove', handleTouchMove, { passive: false });
     el.addEventListener('touchend', handleTouchEnd, { passive: true });
     el.addEventListener('touchcancel', handleTouchEnd, { passive: true });

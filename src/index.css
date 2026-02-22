@@ -27,6 +27,25 @@
     --board-size: min(calc(100vw - 2rem), calc(100vh - 14rem));
     --tile-font-size: clamp(0.875rem, 4vw, 1.5rem);
   }
+
+  html {
+    overflow: hidden;
+    height: 100%;
+  }
+
+  body {
+    overflow: hidden;
+    height: 100%;
+    position: fixed;
+    width: 100%;
+  }
+
+  #root {
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 html,
