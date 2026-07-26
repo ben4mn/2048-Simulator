@@ -4,14 +4,13 @@
  */
 
 import React from 'react';
-import type { Board, Direction, Position } from '../engine/types';
+import type { Board, Position } from '../engine/types';
 
 interface GameBoardProps {
   board: Board;
   className?: string;
   size?: 'small' | 'responsive' | 'large';
   interactive?: boolean;
-  shiftDirection?: Direction | null;
   /**
    * Real per-move effects from GameEngine.getLastMoveEffects(): only the
    * spawned tile plays the "appear" animation and only genuinely merged
@@ -48,13 +47,6 @@ const getTileColor = (value: number): string => {
   };
 
   return colors[value] || 'bg-tile-4096 text-white';
-};
-
-const shiftAnimationMap: Record<Direction, string> = {
-  left: 'board-shift-left',
-  right: 'board-shift-right',
-  up: 'board-shift-up',
-  down: 'board-shift-down',
 };
 
 const getSizeClasses = (size: 'small' | 'responsive' | 'large') => {
@@ -100,7 +92,6 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   className = '',
   size = 'responsive',
   interactive = false,
-  shiftDirection = null,
   effects = null,
   moveKey = 0,
 }) => {
@@ -111,19 +102,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const isMerge = (row: number, col: number) =>
     effects?.merges.some(cell => cell.row === row && cell.col === col) ?? false;
 
-  const shiftStyle = shiftDirection
-    ? { animation: `${shiftAnimationMap[shiftDirection]} 150ms ease-out` }
-    : undefined;
-
   return (
     <div
       role="grid"
       aria-label={describeBoard(board)}
       className={`${sizeClasses.container} ${className} rounded-lg ${sizeClasses.padding} ${sizeClasses.gap} grid grid-cols-4 grid-rows-4 shadow-lg border border-[#4f432f]`}
-      style={{
-        ...shiftStyle,
-        backgroundColor: 'var(--color-board-bg)',
-      }}
+      style={{ backgroundColor: 'var(--color-board-bg)' }}
     >
       {board.map((row, rowIdx) =>
         row.map((value, colIdx) => {

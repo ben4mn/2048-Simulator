@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useGameStore } from './store/gameStore'
 import { useShallow } from 'zustand/react/shallow'
 import PlayView from './components/views/PlayView'
@@ -28,8 +28,6 @@ function App() {
     )
 
   const [playSeed, setPlaySeed] = useState('')
-  const [boardShiftDir, setBoardShiftDir] = useState<Direction | null>(null)
-  const shiftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handlePlaySeed = useCallback((seed: string) => {
     setPlaySeed(seed)
@@ -38,19 +36,7 @@ function App() {
   }, [setViewMode])
 
   const handleMove = useCallback((direction: Direction) => {
-    const moved = useGameStore.getState().makeMove(direction)
-    if (moved) {
-      if (shiftTimer.current) clearTimeout(shiftTimer.current)
-      setBoardShiftDir(direction)
-      shiftTimer.current = setTimeout(() => setBoardShiftDir(null), 150)
-    }
-  }, [])
-
-  // Clear any pending shift-animation timer on unmount.
-  useEffect(() => {
-    return () => {
-      if (shiftTimer.current) clearTimeout(shiftTimer.current)
-    }
+    useGameStore.getState().makeMove(direction)
   }, [])
 
   useEffect(() => {
@@ -169,7 +155,6 @@ function App() {
             <PlayView
               playSeed={playSeed}
               onPlaySeedChange={setPlaySeed}
-              boardShiftDir={boardShiftDir}
               onMove={handleMove}
             />
           )}

@@ -15,11 +15,10 @@ import type { Direction } from '../../engine/types';
 export interface PlayViewProps {
   playSeed: string;
   onPlaySeedChange: (seed: string) => void;
-  boardShiftDir: Direction | null;
   onMove: (direction: Direction) => void;
 }
 
-export function PlayView({ playSeed, onPlaySeedChange, boardShiftDir, onMove }: PlayViewProps) {
+export function PlayView({ playSeed, onPlaySeedChange, onMove }: PlayViewProps) {
   const { gameState, engine, startNewGame, resetGame } = useGameStore(
     useShallow((s) => ({
       gameState: s.gameState,
@@ -47,7 +46,6 @@ export function PlayView({ playSeed, onPlaySeedChange, boardShiftDir, onMove }: 
         <GameBoard
           board={gameState.board}
           size="responsive"
-          shiftDirection={boardShiftDir}
           effects={engine.getLastMoveEffects()}
           moveKey={gameState.moves.length}
         />

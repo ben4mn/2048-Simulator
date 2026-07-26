@@ -73,7 +73,7 @@ const StatPill: React.FC<{ label: string; value: string; pop?: boolean }> = ({
   <div className="flex flex-col items-center px-3 py-1.5 bg-surface-raised rounded-lg min-w-[60px] border border-dark-border">
     <span className="text-[10px] uppercase tracking-wide text-text-muted">{label}</span>
     <span
-      className={`text-sm font-bold text-text-primary ${pop ? 'animate-score-pop' : ''}`}
+      className={`text-sm font-bold text-text-primary tabular-nums ${pop ? 'animate-score-pop' : ''}`}
     >
       {value}
     </span>

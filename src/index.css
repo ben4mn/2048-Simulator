@@ -156,42 +156,6 @@ layer(base);
   }
 
   /* Keyframe Animations */
-  @keyframes board-shift-left {
-    0%,
-    100% {
-      transform: translateX(0);
-    }
-    50% {
-      transform: translateX(-3px);
-    }
-  }
-  @keyframes board-shift-right {
-    0%,
-    100% {
-      transform: translateX(0);
-    }
-    50% {
-      transform: translateX(3px);
-    }
-  }
-  @keyframes board-shift-up {
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-3px);
-    }
-  }
-  @keyframes board-shift-down {
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(3px);
-    }
-  }
 
   @keyframes score-pop {
     0% {
