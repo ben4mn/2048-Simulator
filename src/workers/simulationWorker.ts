@@ -3,7 +3,7 @@
  * Runs headless games at maximum speed without blocking the UI
  */
 
-import { GameEngine } from '../engine/gameEngine';
+import { runGame } from '../engine/gameRunner';
 import { createStrategy, type StrategyFactoryParams } from '../engine/strategy';
 import { CustomStrategyFactory } from '../engine/customStrategyFactory';
 import type { GameResult } from '../engine/types';
@@ -49,28 +49,14 @@ function runSimulation(job: SimulationJob) {
   // Buffer of results not yet posted to the main thread (delta since the
   // last progress message).
   let pendingResults: GameResult[] = [];
-  const startTime = Date.now();
 
   for (let i = 0; i < job.seeds.length; i++) {
     const seed = job.seeds[i];
     const gameStartTime = Date.now();
 
-    // Run the game with a fresh, per-game strategy instance
-    const strategy = makeStrategy();
-    strategy.reset?.(seed);
-    const engine = new GameEngine(seed);
-    let moveCount = 0;
-    const maxMoves = 10000;
-
-    while (!engine.isGameOver() && moveCount < maxMoves) {
-      const move = strategy.selectMove(engine);
-      if (!move) break;
-      // A rejected move leaves the board unchanged; break instead of spinning.
-      if (!engine.move(move)) break;
-      moveCount++;
-    }
-
-    const state = engine.getState();
+    // Run the game with a fresh, per-game strategy instance through the
+    // shared loop in gameRunner.ts (same loop as playGameWithStrategy).
+    const outcome = runGame(seed, makeStrategy());
     const gameEndTime = Date.now();
 
     // Create result record
@@ -79,11 +65,11 @@ function runSimulation(job: SimulationJob) {
       seed,
       strategyId: job.strategyId,
       batchId: job.batchId,
-      moves: state.moves.join(''),
-      finalScore: state.score,
-      maxTile: state.maxTile,
-      moveCount: state.moves.length,
-      result: state.won ? 'win' : 'loss',
+      moves: outcome.moves,
+      finalScore: outcome.score,
+      maxTile: outcome.maxTile,
+      moveCount: outcome.moveCount,
+      result: outcome.won ? 'win' : 'loss',
       timestamp: gameStartTime,
       durationMs: gameEndTime - gameStartTime,
     };
@@ -104,8 +90,4 @@ function runSimulation(job: SimulationJob) {
       self.postMessage(progress);
     }
   }
-
-  console.log(`Simulation completed in ${Date.now() - startTime}ms`);
 }
-
-export default {} as typeof Worker & { new (): Worker };

@@ -4,6 +4,7 @@
 
 import type { Board, CornerPosition, Direction } from './types';
 import { GameEngine } from './gameEngine';
+import { runGame } from './gameRunner';
 import { SeededRNG } from './rng';
 
 export interface Strategy {
@@ -82,17 +83,20 @@ export class CornerAnchorStrategy implements Strategy {
     // Check if max tile is in the corner
     const maxInCorner = board[cornerPos.row][cornerPos.col] === maxTile;
 
-    // If max tile is in corner, prefer moves that keep it there
+    // If max tile is in corner, prefer moves verified (by simulation) to keep
+    // it there: after the move, the corner cell must still hold the board's
+    // maximum tile.
     if (maxInCorner) {
-      const safeMoves = this.getCornerSafeMoves();
-      for (const direction of safeMoves) {
-        if (engine.isValidMove(direction)) {
+      for (const direction of this.priority) {
+        if (!engine.isValidMove(direction)) continue;
+        if (this.keepsMaxInCorner(engine, direction, cornerPos)) {
           return direction;
         }
       }
     }
 
-    // Otherwise, use directional priority to move it toward corner
+    // Otherwise (or when no corner-safe move exists), use directional
+    // priority to move it toward the corner.
     for (const direction of this.priority) {
       if (engine.isValidMove(direction)) {
         return direction;
@@ -100,6 +104,22 @@ export class CornerAnchorStrategy implements Strategy {
     }
 
     return null;
+  }
+
+  /**
+   * Simulate the move on a clone and check the corner cell still holds the
+   * board's maximum tile afterwards (spawns included — the clone shares the
+   * engine's RNG stream, so the simulated spawn matches the real one).
+   */
+  private keepsMaxInCorner(
+    engine: GameEngine,
+    direction: Direction,
+    cornerPos: { row: number; col: number }
+  ): boolean {
+    const clone = engine.clone();
+    if (!clone.move(direction)) return false;
+    const after = clone.getBoardView();
+    return after[cornerPos.row][cornerPos.col] === clone.getMaxTileValue();
   }
 
   private getCornerPosition(): { row: number; col: number } {
@@ -112,20 +132,6 @@ export class CornerAnchorStrategy implements Strategy {
         return { row: 0, col: 0 };
       case 'top-right':
         return { row: 0, col: 3 };
-    }
-  }
-
-  private getCornerSafeMoves(): Direction[] {
-    // Moves that don't disturb the corner position
-    switch (this.corner) {
-      case 'bottom-left':
-        return ['left', 'down'];
-      case 'bottom-right':
-        return ['right', 'down'];
-      case 'top-left':
-        return ['left', 'up'];
-      case 'top-right':
-        return ['right', 'up'];
     }
   }
 }
@@ -141,45 +147,26 @@ export class MergeMaxStrategy implements Strategy {
   selectMove(engine: GameEngine): Direction | null {
     const directions: Direction[] = ['up', 'down', 'left', 'right'];
     let bestDirection: Direction | null = null;
-    let maxMerges = -1;
+    let bestMergeScore = -1;
 
-    const board = engine.getBoardView() as Board;
     for (const direction of directions) {
       if (!engine.isValidMove(direction)) continue;
 
-      const merges = this.countPotentialMerges(board, direction);
-      if (merges > maxMerges) {
-        maxMerges = merges;
+      // Simulate the move on a clone and measure the REAL merge points
+      // gained (score delta), rather than approximating with adjacency
+      // counts. Ties keep the earlier direction in the list.
+      const clone = engine.clone();
+      const before = clone.getScore();
+      if (!clone.move(direction)) continue;
+      const mergeScore = clone.getScore() - before;
+
+      if (mergeScore > bestMergeScore) {
+        bestMergeScore = mergeScore;
         bestDirection = direction;
       }
     }
 
     return bestDirection;
-  }
-
-  private countPotentialMerges(board: Board, direction: Direction): number {
-    // Simplified: count adjacent matching tiles in the direction of movement
-    let count = 0;
-
-    if (direction === 'left' || direction === 'right') {
-      for (let row = 0; row < 4; row++) {
-        for (let col = 0; col < 3; col++) {
-          if (board[row][col] !== 0 && board[row][col] === board[row][col + 1]) {
-            count++;
-          }
-        }
-      }
-    } else {
-      for (let col = 0; col < 4; col++) {
-        for (let row = 0; row < 3; row++) {
-          if (board[row][col] !== 0 && board[row][col] === board[row + 1][col]) {
-            count++;
-          }
-        }
-      }
-    }
-
-    return count;
   }
 }
 
@@ -269,7 +256,8 @@ export class ConditionalStrategy implements Strategy {
     rules: Array<{ condition: (board: Board) => boolean; actions: Direction[]; priority: number }>,
     name?: string
   ) {
-    this.rules = rules.sort((a, b) => b.priority - a.priority); // Higher priority first
+    // Copy before sorting: the caller's array must not be reordered in place.
+    this.rules = [...rules].sort((a, b) => b.priority - a.priority); // Higher priority first
     this.name = name || 'Conditional';
     this.fallback = new DirectionalPriorityStrategy();
   }
@@ -483,7 +471,9 @@ export function createStrategy(type: string, params?: StrategyFactoryParams): St
 }
 
 /**
- * Run a complete game with a strategy
+ * Run a complete game with a strategy.
+ * Thin alias over the shared loop in gameRunner.ts (also used by the
+ * simulation worker), kept for API stability.
  */
 export function playGameWithStrategy(
   seed: string,
@@ -496,28 +486,5 @@ export function playGameWithStrategy(
   won: boolean;
   moveCount: number;
 } {
-  const engine = new GameEngine(seed);
-  let moveCount = 0;
-
-  // Reset stateful strategies so a reused instance plays like a fresh one.
-  strategy.reset?.(seed);
-
-  while (!engine.isGameOver() && moveCount < maxMoves) {
-    const move = strategy.selectMove(engine);
-    if (!move) break;
-
-    // A rejected move means the strategy is stuck (or buggy); the board did
-    // not change, so continuing would spin forever on the same position.
-    if (!engine.move(move)) break;
-    moveCount++;
-  }
-
-  const state = engine.getState();
-  return {
-    moves: state.moves.join(''),
-    score: state.score,
-    maxTile: state.maxTile,
-    won: state.won,
-    moveCount: state.moves.length,
-  };
+  return runGame(seed, strategy, maxMoves);
 }

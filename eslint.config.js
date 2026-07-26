@@ -16,7 +16,14 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': 'warn',
-      // TODO(stage-5): restore to 'error' once remaining `any`s are typed
+      '@typescript-eslint/no-explicit-any': 'error',
+    },
+  },
+  {
+    // Tests conventionally use `as any` to reach into private implementation
+    // details; keep that a warning there instead of an error.
+    files: ['**/__tests__/**'],
+    rules: {
       '@typescript-eslint/no-explicit-any': 'warn',
     },
   }

@@ -28,6 +28,7 @@ layer(base);
   --color-tile-512: #edc850;
   --color-tile-1024: #edc53f;
   --color-tile-2048: #edc22e;
+  --color-tile-4096: #3c3a32;
 
   --color-surface: var(--color-surface);
   --color-surface-raised: var(--color-surface-raised);

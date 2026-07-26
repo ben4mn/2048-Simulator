@@ -2,11 +2,9 @@
  * Testable pieces of the batch-simulation path.
  *
  * The Web Worker itself (self.onmessage) can't run under plain vitest, but its
- * game loop (src/workers/simulationWorker.ts:55-60) is a byte-for-byte
- * duplicate of the loop in playGameWithStrategy (src/engine/strategy.ts:471-477).
- * We pin the desired loop behavior on the exported playGameWithStrategy;
- * whatever fix lands there must also land in the worker's inline copy (or the
- * worker should be refactored to call the shared function).
+ * game loop is the shared runGame() in src/engine/gameRunner.ts — the same
+ * function playGameWithStrategy delegates to. Pinning the loop behavior on
+ * playGameWithStrategy therefore pins the worker's loop too.
  */
 import { describe, expect, it } from 'vitest';
 import { playGameWithStrategy, type Strategy } from '../../engine/strategy';

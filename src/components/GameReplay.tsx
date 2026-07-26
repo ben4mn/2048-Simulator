@@ -7,6 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import GameBoard from './GameBoard';
 import { ReplaySession } from '../engine/replaySession';
 import type { DirectionShort, GameState } from '../engine/types';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface GameReplayProps {
   seed: string;
@@ -85,17 +86,27 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
     setCurrentMove(move);
   };
 
+  const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
+
   if (!gameState) {
     return <div className="text-text-muted">Loading...</div>;
   }
 
   return (
     <div className="fixed inset-0 z-50 md:bg-black/70 md:flex md:items-center md:justify-center md:p-4 bg-app-bg">
-      <div className="h-full md:h-auto md:max-w-2xl md:w-full md:rounded-xl bg-app-bg md:bg-surface border border-dark-border flex flex-col shadow-2xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="game-replay-title"
+        tabIndex={-1}
+        className="h-full md:h-auto md:max-w-2xl md:w-full md:rounded-xl bg-app-bg md:bg-surface border border-dark-border flex flex-col shadow-2xl outline-none"
+      >
         <div className="flex items-center justify-between p-4 shrink-0">
-          <h2 className="text-xl font-bold text-text-primary">Game Replay</h2>
+          <h2 id="game-replay-title" className="text-xl font-bold text-text-primary">Game Replay</h2>
           <button
             onClick={onClose}
+            aria-label="Close replay"
             className="text-text-muted hover:text-text-primary text-2xl font-bold w-8 h-8 flex items-center justify-center"
           >
             ×
@@ -130,6 +141,7 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
         <div className="px-4 mb-3 shrink-0">
           <input
             type="range"
+            aria-label={`Move progress: ${currentMove} of ${totalMoves}`}
             min={0}
             max={totalMoves}
             value={currentMove}
@@ -141,6 +153,7 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
         <div className="flex items-center justify-center gap-2 mb-3 shrink-0">
           <button
             onClick={handleReset}
+            aria-label="Reset to start"
             className="px-4 py-2 bg-surface-raised hover:bg-surface-elevated text-text-primary rounded-md border border-dark-border"
             title="Reset to start"
           >
@@ -148,6 +161,7 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
           </button>
           <button
             onClick={handleStepBack}
+            aria-label="Step back"
             className="px-4 py-2 bg-surface-raised hover:bg-surface-elevated text-text-primary rounded-md border border-dark-border"
             title="Step back"
           >
@@ -155,12 +169,14 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
           </button>
           <button
             onClick={handlePlayPause}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
             className="px-6 py-2 bg-accent hover:bg-accent-strong text-gray-950 rounded-md font-semibold"
           >
             {isPlaying ? '⏸ Pause' : '▶ Play'}
           </button>
           <button
             onClick={handleStepForward}
+            aria-label="Step forward"
             className="px-4 py-2 bg-surface-raised hover:bg-surface-elevated text-text-primary rounded-md border border-dark-border"
             title="Step forward"
           >
@@ -169,7 +185,7 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
         </div>
 
         <div className="flex items-center justify-center gap-3 pb-4 shrink-0">
-          <label className="text-sm text-text-muted">Speed:</label>
+          <label id="replay-speed-label" className="text-sm text-text-muted">Speed:</label>
           {[
             { label: '0.5x', value: 1000 },
             { label: '1x', value: 500 },
@@ -179,6 +195,8 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
             <button
               key={setting.value}
               onClick={() => setSpeed(setting.value)}
+              aria-label={`Playback speed ${setting.label}`}
+              aria-pressed={speed === setting.value}
               className={`px-3 py-1 text-sm rounded-full transition-colors ${
                 speed === setting.value
                   ? 'bg-accent text-gray-950'

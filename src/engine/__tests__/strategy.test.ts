@@ -7,12 +7,30 @@
 import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../gameEngine';
 import {
+  ConditionalStrategy,
+  CornerAnchorStrategy,
   createStrategy,
+  DirectionalPriorityStrategy,
   LookAheadStrategy,
+  MergeMaxStrategy,
   type Strategy,
 } from '../strategy';
 import { BoardEvaluator, DEFAULT_WEIGHTS, RuleValidator } from '../customRules';
 import type { Board, Direction } from '../types';
+
+/**
+ * Force a specific board position onto an engine. The engine exposes no
+ * board-injection API, so this reaches into private state (same deliberate
+ * pattern as gameEngine.test.ts).
+ */
+function engineWithBoard(board: Board): GameEngine {
+  const engine = new GameEngine('INJECT-SEED');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const internal = (engine as any).state;
+  internal.board = board.map(r => r.slice());
+  internal.maxTile = Math.max(...board.flat());
+  return engine;
+}
 
 const DIRECTIONS: Direction[] = ['up', 'down', 'left', 'right'];
 
@@ -122,6 +140,109 @@ describe('strategy move contract (valid or null-only-when-stuck)', () => {
       100
     );
     expect(n).toBeGreaterThanOrEqual(200);
+  });
+});
+
+describe('CornerAnchorStrategy corner-keeping (simulated, not just priority order)', () => {
+  // Board where directional priority and genuine corner-keeping diverge for
+  // a bottom-left anchor (max 16 at [3][0]):
+  //   - 'left' and 'down' are invalid (rows packed left, columns packed down)
+  //   - 'right' is valid but shifts the bottom row right, evicting the max
+  //     tile from the corner
+  //   - 'up' is valid (col 1's lone 2 slides up) and leaves col 0 untouched,
+  //     keeping the max tile in the corner
+  const cornerBoard: Board = [
+    [2, 0, 0, 0],
+    [4, 0, 0, 0],
+    [8, 0, 0, 0],
+    [16, 2, 0, 0],
+  ];
+
+  it('picks a move verified to keep the max tile in the corner over raw priority order', () => {
+    const anchor = new CornerAnchorStrategy('bottom-left');
+    const engine = engineWithBoard(cornerBoard);
+    expect(engine.getValidMoves().sort()).toEqual(['right', 'up']);
+    expect(anchor.selectMove(engine)).toBe('up');
+  });
+
+  it('behaves differently from DirectionalPriorityStrategy on the same board', () => {
+    const directional = new DirectionalPriorityStrategy(); // left > down > right > up
+    expect(directional.selectMove(engineWithBoard(cornerBoard))).toBe('right');
+
+    const anchor = new CornerAnchorStrategy('bottom-left');
+    expect(anchor.selectMove(engineWithBoard(cornerBoard))).toBe('up');
+  });
+
+  it('falls back to priority order when no corner-safe move exists', () => {
+    // Left and down are invalid (everything packed bottom-left, no merges).
+    // The only valid moves — 'up' (col 0 slides up, corner empties) and
+    // 'right' (bottom row slides right) — both evict the max tile from the
+    // corner, so the strategy must fall back to plain priority order
+    // (left > down > right > up for bottom-left) and return 'right', not null.
+    const board: Board = [
+      [0, 0, 0, 0],
+      [2, 0, 0, 0],
+      [4, 0, 0, 0],
+      [16, 0, 0, 0],
+    ];
+    const anchor = new CornerAnchorStrategy('bottom-left');
+    const engine = engineWithBoard(board);
+    expect(engine.getValidMoves().sort()).toEqual(['right', 'up']);
+    expect(anchor.selectMove(engine)).toBe('right');
+  });
+});
+
+describe('MergeMaxStrategy real-merge scoring (simulated, not adjacency counts)', () => {
+  it('prefers the move with the highest actual merge points, including gapped merges', () => {
+    // col 0 holds an adjacent 2,2 pair (merge worth 4 points, up or down).
+    // Row 3 holds a GAPPED 8,_,8 pair (merge worth 16 points, left or right)
+    // that naive adjacency counting misses entirely — the old implementation
+    // scored up/down at 1 pair and left/right at 0 pairs and picked 'up'.
+    // Real simulation scores up/down at 4 points and left/right at 16.
+    const board: Board = [
+      [2, 0, 0, 0],
+      [2, 0, 0, 0],
+      [0, 0, 0, 0],
+      [8, 0, 8, 0],
+    ];
+    const strategy = new MergeMaxStrategy();
+    expect(strategy.selectMove(engineWithBoard(board))).toBe('left');
+  });
+
+  it('picks down over up when up is invalid (down beats up)', () => {
+    // Note: when BOTH vertical moves are valid, their merge scores are always
+    // equal (per-line merge points are direction-symmetric in 2048), so
+    // "down strictly beats up" requires up to be invalid. Here every column
+    // is packed to the top with no vertical merges (up invalid), rows are
+    // packed left with no horizontal merges (left invalid), and down/right
+    // are valid with 0 merge points — down wins the tie by direction order.
+    const board: Board = [
+      [2, 4, 0, 0],
+      [4, 2, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ];
+    const strategy = new MergeMaxStrategy();
+    const engine = engineWithBoard(board);
+    expect(engine.isValidMove('up')).toBe(false);
+    expect(engine.isValidMove('down')).toBe(true);
+    expect(strategy.selectMove(engine)).toBe('down');
+  });
+});
+
+describe('ConditionalStrategy rules array handling', () => {
+  it('does not reorder the caller\'s rules array in place', () => {
+    const rules = [
+      { condition: () => false, actions: ['left'] as Direction[], priority: 1 },
+      { condition: () => false, actions: ['down'] as Direction[], priority: 9 },
+      { condition: () => false, actions: ['right'] as Direction[], priority: 5 },
+    ];
+    const originalOrder = [...rules];
+
+    new ConditionalStrategy(rules);
+
+    expect(rules).toEqual(originalOrder);
+    expect(rules.map(r => r.priority)).toEqual([1, 9, 5]);
   });
 });
 

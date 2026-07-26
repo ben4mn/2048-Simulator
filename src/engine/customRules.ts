@@ -4,6 +4,7 @@
  */
 
 import type { Board, Direction } from './types';
+import { countEmptyTiles, countMerges, findMaxTile } from './boardUtils';
 
 // ===== Rule Type Definitions =====
 
@@ -78,34 +79,14 @@ export class BoardEvaluator {
    * Count empty tiles on the board
    */
   static countEmptyTiles(board: Board): number {
-    let count = 0;
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 4; col++) {
-        if (board[row][col] === 0) count++;
-      }
-    }
-    return count;
+    return countEmptyTiles(board);
   }
 
   /**
    * Get the maximum tile value and its position
    */
   static getMaxTile(board: Board): { value: number; row: number; col: number } {
-    let maxValue = 0;
-    let maxRow = 0;
-    let maxCol = 0;
-
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 4; col++) {
-        if (board[row][col] > maxValue) {
-          maxValue = board[row][col];
-          maxRow = row;
-          maxCol = col;
-        }
-      }
-    }
-
-    return { value: maxValue, row: maxRow, col: maxCol };
+    return findMaxTile(board);
   }
 
   /**
@@ -149,42 +130,7 @@ export class BoardEvaluator {
    * (e.g. [2, 0, 2] is one potential merge), so empties are looked through.
    */
   static countMerges(board: Board): number {
-    let count = 0;
-
-    // Horizontal merges
-    for (let row = 0; row < 4; row++) {
-      count += this.countLineMerges([
-        board[row][0], board[row][1], board[row][2], board[row][3],
-      ]);
-    }
-
-    // Vertical merges
-    for (let col = 0; col < 4; col++) {
-      count += this.countLineMerges([
-        board[0][col], board[1][col], board[2][col], board[3][col],
-      ]);
-    }
-
-    return count;
-  }
-
-  /**
-   * Count merges available in a single line after sliding (empties ignored).
-   * Matches 2048 merge semantics: each tile merges at most once per slide.
-   */
-  private static countLineMerges(line: number[]): number {
-    const tiles = line.filter(v => v !== 0);
-    let count = 0;
-    let i = 0;
-    while (i < tiles.length - 1) {
-      if (tiles[i] === tiles[i + 1]) {
-        count++;
-        i += 2;
-      } else {
-        i += 1;
-      }
-    }
-    return count;
+    return countMerges(board);
   }
 
   /**
@@ -408,8 +354,13 @@ export class RuleValidator {
         return this.validateLookAheadRule(rule);
       case 'weighted':
         return this.validateWeightedRule(rule);
-      default:
+      default: {
+        // Exhaustiveness guard: adding a new CustomRule variant without a
+        // case above makes this assignment a compile error.
+        const unhandled: never = rule;
+        void unhandled;
         return 'Unknown rule type';
+      }
     }
   }
 }

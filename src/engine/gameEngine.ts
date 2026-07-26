@@ -4,6 +4,7 @@
  */
 
 import { SeededRNG } from './rng';
+import { getMaxTileValue } from './boardUtils';
 import type { Board, Direction, DirectionShort, GameState, MoveResult, Position } from './types';
 
 export class GameEngine {
@@ -55,7 +56,7 @@ export class GameEngine {
       moves: [],
       gameOver: false,
       won: false,
-      maxTile: this.getMaxTile(board),
+      maxTile: getMaxTileValue(board),
     };
   }
 
@@ -136,7 +137,6 @@ export class GameEngine {
       board: finalBoard,
       score: totalMerged,
       moved,
-      merged: totalMerged,
     };
   }
 
@@ -259,19 +259,6 @@ export class GameEngine {
   }
 
   /**
-   * Get maximum tile value on the board
-   */
-  private getMaxTile(board: Board): number {
-    let max = 0;
-    for (const row of board) {
-      for (const tile of row) {
-        if (tile > max) max = tile;
-      }
-    }
-    return max;
-  }
-
-  /**
    * Make a move in the given direction
    */
   move(direction: Direction): boolean {
@@ -292,7 +279,7 @@ export class GameEngine {
     this.spawnTile(this.state.board);
 
     // Update max tile
-    this.state.maxTile = this.getMaxTile(this.state.board);
+    this.state.maxTile = getMaxTileValue(this.state.board);
 
     // Check win condition
     if (!this.state.won && this.state.maxTile >= 2048) {

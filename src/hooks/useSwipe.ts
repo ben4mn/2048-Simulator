@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 import type { Direction } from '../engine/types';
 
 interface UseSwipeOptions {
@@ -17,22 +17,46 @@ export function useSwipe({
   const ref = useRef<HTMLDivElement>(null);
   const touchStart = useRef<{ x: number; y: number; time: number } | null>(null);
 
-  const handleTouchStart = useCallback(
-    (e: TouchEvent) => {
-      if (!enabled) return;
+  // Keep latest values in refs so the listeners below can be attached exactly
+  // once (on mount) instead of being torn down and re-added every time
+  // `enabled` (or any other option) changes.
+  const enabledRef = useRef(enabled);
+  const onSwipeRef = useRef(onSwipe);
+  const thresholdRef = useRef(threshold);
+  const maxTimeRef = useRef(maxTime);
+
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+
+  useEffect(() => {
+    onSwipeRef.current = onSwipe;
+  }, [onSwipe]);
+
+  useEffect(() => {
+    thresholdRef.current = threshold;
+  }, [threshold]);
+
+  useEffect(() => {
+    maxTimeRef.current = maxTime;
+  }, [maxTime]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!enabledRef.current) return;
       const touch = e.touches[0];
       touchStart.current = {
         x: touch.clientX,
         y: touch.clientY,
         time: Date.now(),
       };
-    },
-    [enabled]
-  );
+    };
 
-  const handleTouchEnd = useCallback(
-    (e: TouchEvent) => {
-      if (!enabled || !touchStart.current) return;
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!enabledRef.current || !touchStart.current) return;
       const touch = e.changedTouches[0];
       const dx = touch.clientX - touchStart.current.x;
       const dy = touch.clientY - touchStart.current.y;
@@ -40,12 +64,12 @@ export function useSwipe({
 
       touchStart.current = null;
 
-      if (dt > maxTime) return;
+      if (dt > maxTimeRef.current) return;
 
       const absDx = Math.abs(dx);
       const absDy = Math.abs(dy);
 
-      if (absDx < threshold && absDy < threshold) return;
+      if (absDx < thresholdRef.current && absDy < thresholdRef.current) return;
 
       let direction: Direction;
       if (absDx > absDy) {
@@ -54,22 +78,13 @@ export function useSwipe({
         direction = dy > 0 ? 'down' : 'up';
       }
 
-      onSwipe(direction);
-    },
-    [enabled, onSwipe, threshold, maxTime]
-  );
+      onSwipeRef.current(direction);
+    };
 
-  const handleTouchMove = useCallback(
-    (e: TouchEvent) => {
-      if (!enabled || !touchStart.current) return;
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!enabledRef.current || !touchStart.current) return;
       e.preventDefault();
-    },
-    [enabled]
-  );
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    };
 
     el.addEventListener('touchstart', handleTouchStart, { passive: true });
     el.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -82,7 +97,9 @@ export function useSwipe({
       el.removeEventListener('touchend', handleTouchEnd);
       el.removeEventListener('touchcancel', handleTouchEnd);
     };
-  }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
+    // Intentionally empty: listeners are attached once and read live values
+    // via refs, so toggling `enabled` never tears down/re-adds them.
+  }, []);
 
   return ref;
 }

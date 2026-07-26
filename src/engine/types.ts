@@ -24,9 +24,8 @@ export interface GameState {
 
 export interface MoveResult {
   board: Board;
-  score: number;
+  score: number; // Points gained from merges
   moved: boolean; // Did the board change?
-  merged: number; // Points gained from merges
 }
 
 export interface GameResult {
