@@ -11,6 +11,10 @@ export class GameEngine {
   private rng: SeededRNG;
   private state: GameState;
   private readonly seed: string;
+  // Where the last move's random tile spawned and which cells received a
+  // merge — consumed by the UI to animate exactly those tiles.
+  private lastSpawn: Position | null = null;
+  private lastMergedCells: Position[] = [];
 
   constructor(seed: string, snapshot?: { rngState: number; state: GameState }) {
     this.seed = seed;
@@ -86,15 +90,15 @@ export class GameEngine {
   /**
    * Spawn a new tile (90% chance of 2, 10% chance of 4)
    */
-  private spawnTile(board: Board): boolean {
+  private spawnTile(board: Board): Position | null {
     const emptyCells = this.getEmptyCells(board);
-    if (emptyCells.length === 0) return false;
+    if (emptyCells.length === 0) return null;
 
     const pos = this.rng.choice(emptyCells);
     const value = this.rng.nextBool(0.9) ? 2 : 4;
     board[pos.row][pos.col] = value;
 
-    return true;
+    return pos;
   }
 
   /**
@@ -120,14 +124,18 @@ export class GameEngine {
 
     // Transform board based on direction for easier processing
     // Always process from left, then transform back
-    const { transformed, toOriginal } = this.transformBoard(newBoard, direction);
+    const { transformed, toOriginal, mapBack } = this.transformBoard(newBoard, direction);
 
     // Process each row (slide left and merge)
+    const mergedCells: Position[] = [];
     for (let row = 0; row < 4; row++) {
-      const { line, merged, changed } = this.slideAndMergeLine(transformed[row]);
+      const { line, merged, changed, mergedIndices } = this.slideAndMergeLine(transformed[row]);
       transformed[row] = line;
       totalMerged += merged;
       if (changed) moved = true;
+      for (const idx of mergedIndices) {
+        mergedCells.push(mapBack(row, idx));
+      }
     }
 
     // Transform back to original orientation
@@ -137,6 +145,7 @@ export class GameEngine {
       board: finalBoard,
       score: totalMerged,
       moved,
+      mergedCells,
     };
   }
 
@@ -149,30 +158,37 @@ export class GameEngine {
   ): {
     transformed: Board;
     toOriginal: (b: Board) => Board;
+    // Maps (row, col) in the transformed ("slide left") orientation back to
+    // the cell's position on the original board.
+    mapBack: (row: number, col: number) => Position;
   } {
     switch (direction) {
       case 'left':
         return {
           transformed: this.copyBoard(board),
           toOriginal: (b) => this.copyBoard(b),
+          mapBack: (row, col) => ({ row, col }),
         };
 
       case 'right':
         return {
           transformed: board.map(row => [...row].reverse()),
           toOriginal: (b) => b.map(row => [...row].reverse()),
+          mapBack: (row, col) => ({ row, col: 3 - col }),
         };
 
       case 'up':
         return {
           transformed: this.transpose(board),
           toOriginal: (b) => this.transpose(b),
+          mapBack: (row, col) => ({ row: col, col: row }),
         };
 
       case 'down':
         return {
           transformed: this.transpose(board).map(row => [...row].reverse()),
           toOriginal: (b) => this.transpose(b.map(row => [...row].reverse())),
+          mapBack: (row, col) => ({ row: 3 - col, col: row }),
         };
     }
   }
@@ -197,6 +213,7 @@ export class GameEngine {
     line: number[];
     merged: number;
     changed: boolean;
+    mergedIndices: number[];
   } {
     // Remove zeros
     const tiles = line.filter(x => x !== 0);
@@ -205,10 +222,12 @@ export class GameEngine {
 
     // Merge adjacent equal tiles
     const newTiles: number[] = [];
+    const mergedIndices: number[] = [];
     let i = 0;
     while (i < tiles.length) {
       if (i + 1 < tiles.length && tiles[i] === tiles[i + 1]) {
         const mergedValue = tiles[i] * 2;
+        mergedIndices.push(newTiles.length);
         newTiles.push(mergedValue);
         merged += mergedValue;
         changed = true;
@@ -234,7 +253,7 @@ export class GameEngine {
       }
     }
 
-    return { line: newTiles, merged, changed };
+    return { line: newTiles, merged, changed, mergedIndices };
   }
 
   /**
@@ -274,9 +293,10 @@ export class GameEngine {
     this.state.board = moveResult.board;
     this.state.score += moveResult.score;
     this.state.moves.push(this.directionToShort(direction));
+    this.lastMergedCells = moveResult.mergedCells;
 
     // Spawn new tile
-    this.spawnTile(this.state.board);
+    this.lastSpawn = this.spawnTile(this.state.board);
 
     // Update max tile
     this.state.maxTile = getMaxTileValue(this.state.board);
@@ -292,6 +312,18 @@ export class GameEngine {
     }
 
     return true;
+  }
+
+  /**
+   * Effects of the most recent successful move: where the random tile
+   * spawned and which cells received a merged tile. Empty/null before the
+   * first move and after reset(). Intended for UI animation.
+   */
+  getLastMoveEffects(): { spawn: Position | null; merges: Position[] } {
+    return {
+      spawn: this.lastSpawn ? { ...this.lastSpawn } : null,
+      merges: this.lastMergedCells.map(cell => ({ ...cell })),
+    };
   }
 
   /**
@@ -365,5 +397,7 @@ export class GameEngine {
   reset(): void {
     this.rng.reset();
     this.state = this.createInitialState();
+    this.lastSpawn = null;
+    this.lastMergedCells = [];
   }
 }

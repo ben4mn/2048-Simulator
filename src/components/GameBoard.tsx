@@ -3,8 +3,8 @@
  * Displays the 4x4 grid with animated tiles
  */
 
-import React, { useState } from 'react';
-import type { Board, Direction } from '../engine/types';
+import React from 'react';
+import type { Board, Direction, Position } from '../engine/types';
 
 interface GameBoardProps {
   board: Board;
@@ -12,6 +12,19 @@ interface GameBoardProps {
   size?: 'small' | 'responsive' | 'large';
   interactive?: boolean;
   shiftDirection?: Direction | null;
+  /**
+   * Real per-move effects from GameEngine.getLastMoveEffects(): only the
+   * spawned tile plays the "appear" animation and only genuinely merged
+   * cells play "merge". Omit (e.g. in replays/previews) to disable
+   * per-tile animations entirely.
+   */
+  effects?: { spawn: Position | null; merges: Position[] } | null;
+  /**
+   * Monotonic move counter (e.g. gameState.moves.length). Keys animated
+   * cells so their CSS animation restarts on every move, even when the same
+   * cell animates in consecutive moves.
+   */
+  moveKey?: number;
 }
 
 // Single source of truth for tile styling: colors themselves live in
@@ -70,28 +83,6 @@ const getSizeClasses = (size: 'small' | 'responsive' | 'large') => {
   }
 };
 
-type CellAnimation = 'appear' | 'merge' | null;
-
-/**
- * Classify each cell as newly-appeared, merged, or unchanged by comparing
- * against the board from the previous render. This is a positional
- * approximation (the engine doesn't expose per-tile identity/merge info),
- * but it's a good visual proxy: a cell that was empty and now has a value
- * just spawned or slid in; a cell whose value changed without becoming
- * newly non-empty just merged.
- */
-function classifyCells(board: Board, previous: Board | null): CellAnimation[][] {
-  return board.map((row, rowIdx) =>
-    row.map((value, colIdx) => {
-      if (value === 0) return null;
-      const prevValue = previous ? previous[rowIdx]?.[colIdx] ?? 0 : 0;
-      if (prevValue === 0) return 'appear';
-      if (prevValue !== value) return 'merge';
-      return null;
-    })
-  );
-}
-
 const describeBoard = (board: Board): string => {
   let highest = 0;
   let score = 0;
@@ -110,22 +101,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   size = 'responsive',
   interactive = false,
   shiftDirection = null,
+  effects = null,
+  moveKey = 0,
 }) => {
   const sizeClasses = getSizeClasses(size);
 
-  // Derive per-cell animation state from the previous board without an
-  // effect/ref: this is React's documented "adjust state during render"
-  // pattern for reacting to a prop change (board is a fresh array each move,
-  // so identity comparison is reliable here).
-  const [previousBoard, setPreviousBoard] = useState<Board | null>(null);
-  const [cellAnimations, setCellAnimations] = useState<CellAnimation[][]>(() =>
-    classifyCells(board, null)
-  );
-
-  if (board !== previousBoard) {
-    setPreviousBoard(board);
-    setCellAnimations(classifyCells(board, previousBoard));
-  }
+  const isSpawn = (row: number, col: number) =>
+    effects?.spawn?.row === row && effects?.spawn?.col === col;
+  const isMerge = (row: number, col: number) =>
+    effects?.merges.some(cell => cell.row === row && cell.col === col) ?? false;
 
   const shiftStyle = shiftDirection
     ? { animation: `${shiftAnimationMap[shiftDirection]} 150ms ease-out` }
@@ -135,7 +119,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     <div
       role="grid"
       aria-label={describeBoard(board)}
-      className={`${sizeClasses.container} ${className} rounded-lg ${sizeClasses.padding} ${sizeClasses.gap} grid grid-cols-4 shadow-lg border border-[#4f432f]`}
+      className={`${sizeClasses.container} ${className} rounded-lg ${sizeClasses.padding} ${sizeClasses.gap} grid grid-cols-4 grid-rows-4 shadow-lg border border-[#4f432f]`}
       style={{
         ...shiftStyle,
         backgroundColor: 'var(--color-board-bg)',
@@ -143,10 +127,17 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     >
       {board.map((row, rowIdx) =>
         row.map((value, colIdx) => {
-          const animation = cellAnimations[rowIdx][colIdx];
+          const animation =
+            value !== 0 && isSpawn(rowIdx, colIdx)
+              ? 'appear'
+              : value !== 0 && isMerge(rowIdx, colIdx)
+                ? 'merge'
+                : null;
           return (
             <div
-              key={`${rowIdx}-${colIdx}`}
+              // Animated cells get a per-move key so remounting restarts
+              // their CSS animation; static cells keep a stable positional key.
+              key={animation ? `${rowIdx}-${colIdx}-m${moveKey}` : `${rowIdx}-${colIdx}`}
               role="gridcell"
               aria-label={value === 0 ? 'empty' : String(value)}
               className={`
@@ -155,8 +146,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 rounded-md
                 flex items-center justify-center
                 font-bold
-                transition-all duration-150
-                ${interactive ? 'hover:scale-105 cursor-pointer' : ''}
+                ${interactive ? 'transition-transform duration-150 hover:scale-105 cursor-pointer' : ''}
                 ${value === 0 ? '' : 'shadow-md'}
                 ${animation === 'appear' ? 'animate-tile-appear' : ''}
                 ${animation === 'merge' ? 'animate-tile-merge' : ''}

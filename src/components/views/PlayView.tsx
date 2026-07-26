@@ -44,7 +44,13 @@ export function PlayView({ playSeed, onPlaySeedChange, boardShiftDir, onMove }: 
       <GameStats gameState={gameState} seed={engine.getSeed()} className="mb-4" />
 
       <div ref={swipeRef} className="relative flex flex-col items-center mb-4 swipe-area">
-        <GameBoard board={gameState.board} size="responsive" shiftDirection={boardShiftDir} />
+        <GameBoard
+          board={gameState.board}
+          size="responsive"
+          shiftDirection={boardShiftDir}
+          effects={engine.getLastMoveEffects()}
+          moveKey={gameState.moves.length}
+        />
 
         {isGameEnded && (
           <div className="absolute inset-0 bg-black/70 rounded-lg flex flex-col items-center justify-center board-overlay">

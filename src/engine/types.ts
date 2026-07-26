@@ -26,6 +26,7 @@ export interface MoveResult {
   board: Board;
   score: number; // Points gained from merges
   moved: boolean; // Did the board change?
+  mergedCells: Position[]; // Cells that received a merged tile this move
 }
 
 export interface GameResult {
