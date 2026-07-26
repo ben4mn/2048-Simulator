@@ -174,7 +174,7 @@ export class GameEngine {
     changed: boolean;
   } {
     // Remove zeros
-    let tiles = line.filter(x => x !== 0);
+    const tiles = line.filter(x => x !== 0);
     let merged = 0;
     let changed = false;
 
