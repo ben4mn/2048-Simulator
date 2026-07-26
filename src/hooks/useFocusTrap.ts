@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// Stack of currently-active trap containers. Only the innermost (topmost)
+// trap responds to Escape/Tab, so nested dialogs (e.g. a ConfirmDialog inside
+// the custom-builder slide-over) don't both close on a single Escape.
+const trapStack: HTMLElement[] = [];
 
 /**
  * Minimal focus trap + Escape-to-close for a dialog/overlay element.
@@ -19,10 +24,18 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean, onClose: ()
     setContainer(node);
   }, []);
 
+  // Keep the latest onClose in a ref so an unstable callback identity doesn't
+  // tear down and re-run the trap (which would steal focus mid-interaction).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!active || !container) return;
 
     const previouslyFocused = document.activeElement as HTMLElement | null;
+    trapStack.push(container);
 
     const getFocusable = () =>
       Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
@@ -33,9 +46,11 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean, onClose: ()
     (initial[0] || container).focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (trapStack[trapStack.length - 1] !== container) return;
+
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -58,9 +73,11 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean, onClose: ()
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      const idx = trapStack.lastIndexOf(container);
+      if (idx !== -1) trapStack.splice(idx, 1);
       previouslyFocused?.focus?.();
     };
-  }, [active, onClose, container]);
+  }, [active, container]);
 
   return containerRef;
 }

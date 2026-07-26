@@ -76,7 +76,9 @@ function App() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const { viewMode, gameState } = useGameStore.getState()
-      if (viewMode !== 'play' || !gameState) return
+      // Match the swipe hook's enablement: no input once the game has ended,
+      // so keys can't mutate the finished game behind the win/lose overlay.
+      if (viewMode !== 'play' || !gameState || gameState.gameOver || gameState.won) return
 
       const direction = keyMap[e.key]
       if (direction) {

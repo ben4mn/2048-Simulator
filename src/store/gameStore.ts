@@ -201,6 +201,32 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Progress messages carry only the results since the previous message
     // (deltas); accumulate them here for the final result set.
     const accumulatedResults: GameResult[] = [];
+    // Set when a mid-batch delta fails to persist; the batch must then be
+    // marked failed rather than complete, since games would be missing.
+    let deltaSaveFailed = false;
+
+    const failBatch = (message: string) => {
+      worker.terminate();
+      set({
+        worker: null,
+        isRunningBatch: false,
+        currentBatchId: null,
+        storageError: message,
+      });
+      void db.saveBatch({ ...runningBatch, status: 'failed' }).catch(() => {
+        /* nothing more we can do if this also fails */
+      });
+    };
+
+    // A worker-level crash (e.g. a strategy factory throwing on malformed
+    // saved rules) never sends a message — without this the batch would sit
+    // at "Running..." forever.
+    worker.onerror = (e) => {
+      failBatch(`Simulation failed: ${e.message || 'worker error'}`);
+    };
+    worker.onmessageerror = () => {
+      failBatch('Simulation failed: could not read worker message');
+    };
 
     worker.onmessage = (e: MessageEvent<SimulationProgress>) => {
       const progress = e.data;
@@ -219,6 +245,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // is written exactly once.
       if (!isFinal && progress.results.length > 0) {
         void db.saveGames(progress.results).catch((error) => {
+          deltaSaveFailed = true;
           set({
             storageError: `Failed to save game results: ${error instanceof Error ? error.message : String(error)}`,
           });
@@ -233,6 +260,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         void (async () => {
           try {
             await db.saveGames(progress.results);
+            if (deltaSaveFailed) {
+              throw new Error(
+                'some game results failed to save earlier in the run'
+              );
+            }
             const completedAt = new Date().toISOString();
             await db.saveBatch({
               ...runningBatch,

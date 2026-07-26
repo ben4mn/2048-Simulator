@@ -293,8 +293,10 @@ export class LookAheadStrategy implements Strategy {
   private evaluateBoard: (board: Board) => number;
 
   constructor(depth: number, evaluateBoard: (board: Board) => number, name?: string) {
-    // Honor every depth RuleValidator accepts (1-5); clamp only out-of-range input.
-    this.depth = Math.max(1, Math.min(depth, 5));
+    // Honor every depth RuleValidator accepts (1-5); clamp only out-of-range
+    // input. Truncate to an integer so a fractional depth (e.g. 2.5) can't
+    // skip the depth === 1 base case and recurse to exhaustion.
+    this.depth = Math.max(1, Math.min(Math.floor(depth) || 1, 5));
     this.evaluateBoard = evaluateBoard;
     this.name = name || `Look-Ahead (depth ${this.depth})`;
   }
