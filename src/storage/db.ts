@@ -25,7 +25,7 @@ export interface Strategy {
   id: string;
   name: string;
   type: string;
-  params: Record<string, any>;
+  params: Record<string, unknown>;
   stats: {
     gamesPlayed: number;
     winRate: number;
@@ -49,25 +49,39 @@ class Database {
         resolve();
       };
 
+      request.onblocked = () => {
+        reject(
+          new Error(
+            'Database upgrade blocked: another tab has an open connection to an older version. ' +
+              'Please close other tabs of this app and reload.'
+          )
+        );
+      };
+
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
+        const oldVersion = event.oldVersion;
 
-        // Create object stores
-        if (!db.objectStoreNames.contains('games')) {
-          const gamesStore = db.createObjectStore('games', { keyPath: 'id' });
-          gamesStore.createIndex('batchId', 'batchId', { unique: false });
-          gamesStore.createIndex('strategyId', 'strategyId', { unique: false });
-          gamesStore.createIndex('timestamp', 'timestamp', { unique: false });
+        if (oldVersion < 1) {
+          // Create object stores
+          if (!db.objectStoreNames.contains('games')) {
+            const gamesStore = db.createObjectStore('games', { keyPath: 'id' });
+            gamesStore.createIndex('batchId', 'batchId', { unique: false });
+            gamesStore.createIndex('strategyId', 'strategyId', { unique: false });
+            gamesStore.createIndex('timestamp', 'timestamp', { unique: false });
+          }
+
+          if (!db.objectStoreNames.contains('batches')) {
+            const batchesStore = db.createObjectStore('batches', { keyPath: 'id' });
+            batchesStore.createIndex('createdAt', 'createdAt', { unique: false });
+          }
+
+          if (!db.objectStoreNames.contains('strategies')) {
+            db.createObjectStore('strategies', { keyPath: 'id' });
+          }
         }
 
-        if (!db.objectStoreNames.contains('batches')) {
-          const batchesStore = db.createObjectStore('batches', { keyPath: 'id' });
-          batchesStore.createIndex('createdAt', 'createdAt', { unique: false });
-        }
-
-        if (!db.objectStoreNames.contains('strategies')) {
-          db.createObjectStore('strategies', { keyPath: 'id' });
-        }
+        // Future migrations: if (oldVersion < 2) { ... }
       };
     });
   }
@@ -89,6 +103,8 @@ class Database {
   }
 
   async saveGames(games: GameResult[]): Promise<void> {
+    if (games.length === 0) return Promise.resolve();
+
     return new Promise((resolve, reject) => {
       const store = this.getStore('games', 'readwrite');
       let completed = 0;

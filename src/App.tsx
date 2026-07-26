@@ -43,6 +43,7 @@ function App() {
     setViewMode,
     initialize,
     startBatchSimulation,
+    stopBatchSimulation,
     isRunningBatch,
     batchProgress,
     batchTotal,
@@ -52,6 +53,8 @@ function App() {
     selectBatch,
     selectedGameId,
     selectGame,
+    storageError,
+    clearStorageError,
   } = useGameStore()
 
   const [playSeed, setPlaySeed] = useState('')
@@ -177,6 +180,19 @@ function App() {
         </div>
 
         <main className="max-w-6xl mx-auto">
+          {storageError && (
+            <div className="max-w-2xl mx-auto mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 flex items-start justify-between gap-3 text-sm text-red-300">
+              <span>{storageError}</span>
+              <button
+                onClick={clearStorageError}
+                aria-label="Dismiss error"
+                className="text-red-300 hover:text-red-100 font-semibold leading-none"
+              >
+                &times;
+              </button>
+            </div>
+          )}
+
           {viewMode === 'play' && (
             <div className="max-w-2xl mx-auto">
               <GameStats
@@ -262,12 +278,20 @@ function App() {
               />
 
               {isRunningBatch && (
-                <div className="bg-surface border border-dark-border rounded-xl p-5 shadow-lg shadow-black/20">
+                <div className="bg-surface border border-dark-border rounded-xl p-5 shadow-lg shadow-black/20 space-y-4">
                   <ProgressIndicator
                     current={batchProgress}
                     total={batchTotal}
                     label="Running simulations..."
                   />
+                  <div className="flex justify-end">
+                    <button
+                      onClick={stopBatchSimulation}
+                      className="px-4 py-2 bg-surface-raised hover:bg-surface-elevated text-text-primary font-semibold rounded-lg transition-colors border border-dark-border"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

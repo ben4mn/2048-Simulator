@@ -58,7 +58,7 @@ describe('strategy move contract (valid or null-only-when-stuck)', () => {
 
   it('CornerAnchorStrategy (all four corners)', () => {
     let n = 0;
-    for (const corner of ['bottom-left', 'bottom-right', 'top-left', 'top-right']) {
+    for (const corner of ['bottom-left', 'bottom-right', 'top-left', 'top-right'] as const) {
       n += assertMoveContract(() => createStrategy('corner_anchor', { corner }), CHEAP_SEEDS.slice(0, 2), 60);
     }
     expect(n).toBeGreaterThanOrEqual(200);

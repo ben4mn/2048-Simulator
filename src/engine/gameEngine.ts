@@ -30,7 +30,7 @@ export class GameEngine {
       moves: [],
       gameOver: false,
       won: false,
-      maxTile: 2,
+      maxTile: this.getMaxTile(board),
     };
   }
 

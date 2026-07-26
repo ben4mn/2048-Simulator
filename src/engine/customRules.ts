@@ -17,7 +17,7 @@ export interface PatternRule {
 export interface ConditionalRule {
   type: 'conditional';
   condition: ConditionType;
-  conditionParams?: any;
+  conditionParams?: ConditionParams;
   action: Direction[];
   priority: number; // Higher = evaluated first
 }
@@ -138,33 +138,52 @@ export class BoardEvaluator {
         return row === 3 && col === 0;
       case 'bottom-right':
         return row === 3 && col === 3;
+      default:
+        return false;
     }
   }
 
   /**
-   * Count potential merges on the board
+   * Count potential merges on the board.
+   * Tiles separated only by empty cells can merge when the line slides
+   * (e.g. [2, 0, 2] is one potential merge), so empties are looked through.
    */
   static countMerges(board: Board): number {
     let count = 0;
 
     // Horizontal merges
     for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 3; col++) {
-        if (board[row][col] !== 0 && board[row][col] === board[row][col + 1]) {
-          count++;
-        }
-      }
+      count += this.countLineMerges([
+        board[row][0], board[row][1], board[row][2], board[row][3],
+      ]);
     }
 
     // Vertical merges
     for (let col = 0; col < 4; col++) {
-      for (let row = 0; row < 3; row++) {
-        if (board[row][col] !== 0 && board[row][col] === board[row + 1][col]) {
-          count++;
-        }
-      }
+      count += this.countLineMerges([
+        board[0][col], board[1][col], board[2][col], board[3][col],
+      ]);
     }
 
+    return count;
+  }
+
+  /**
+   * Count merges available in a single line after sliding (empties ignored).
+   * Matches 2048 merge semantics: each tile merges at most once per slide.
+   */
+  private static countLineMerges(line: number[]): number {
+    const tiles = line.filter(v => v !== 0);
+    let count = 0;
+    let i = 0;
+    while (i < tiles.length - 1) {
+      if (tiles[i] === tiles[i + 1]) {
+        count++;
+        i += 2;
+      } else {
+        i += 1;
+      }
+    }
     return count;
   }
 
@@ -173,9 +192,14 @@ export class BoardEvaluator {
    * Measures how well tiles are arranged in ascending/descending order
    */
   static calculateMonotonicity(board: Board): number {
-    let score = 0;
+    return this.calculateRowMonotonicity(board) + this.calculateColMonotonicity(board);
+  }
 
-    // Check rows
+  /**
+   * Row-only monotonicity score (max 12: 3 ordered pairs per row x 4 rows)
+   */
+  static calculateRowMonotonicity(board: Board): number {
+    let score = 0;
     for (let row = 0; row < 4; row++) {
       let increasing = 0;
       let decreasing = 0;
@@ -189,8 +213,14 @@ export class BoardEvaluator {
       }
       score += Math.max(increasing, decreasing);
     }
+    return score;
+  }
 
-    // Check columns
+  /**
+   * Column-only monotonicity score (max 12: 3 ordered pairs per column x 4 columns)
+   */
+  static calculateColMonotonicity(board: Board): number {
+    let score = 0;
     for (let col = 0; col < 4; col++) {
       let increasing = 0;
       let decreasing = 0;
@@ -204,7 +234,6 @@ export class BoardEvaluator {
       }
       score += Math.max(increasing, decreasing);
     }
-
     return score;
   }
 
@@ -293,13 +322,17 @@ export class ConditionEvaluator {
       }
 
       case 'monotonic_rows': {
-        const monotonicity = BoardEvaluator.calculateMonotonicity(board);
-        return monotonicity > (params?.threshold || 12); // Arbitrary threshold
+        const monotonicity = BoardEvaluator.calculateRowMonotonicity(board);
+        const threshold = params?.threshold;
+        // Explicit threshold: strictly exceed it (so 0 means "any monotonicity").
+        // Default: rows are fully monotonic (3 ordered pairs x 4 rows = 12).
+        return threshold !== undefined ? monotonicity > threshold : monotonicity >= 12;
       }
 
       case 'monotonic_cols': {
-        const monotonicity = BoardEvaluator.calculateMonotonicity(board);
-        return monotonicity > (params?.threshold || 12);
+        const monotonicity = BoardEvaluator.calculateColMonotonicity(board);
+        const threshold = params?.threshold;
+        return threshold !== undefined ? monotonicity > threshold : monotonicity >= 12;
       }
 
       default:

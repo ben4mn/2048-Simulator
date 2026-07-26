@@ -4,7 +4,7 @@
  */
 
 import { GameEngine } from '../engine/gameEngine';
-import { createStrategy } from '../engine/strategy';
+import { createStrategy, type StrategyFactoryParams } from '../engine/strategy';
 import { CustomStrategyFactory } from '../engine/customStrategyFactory';
 import type { GameResult } from '../engine/types';
 import type { CustomRule } from '../engine/customRules';
@@ -13,7 +13,7 @@ export interface SimulationJob {
   jobId: string;
   strategyId: string;
   strategyType: string;
-  strategyParams?: any;
+  strategyParams?: StrategyFactoryParams | Record<string, unknown>;
   seeds: string[];
   batchId: string;
   customRules?: CustomRule[];
@@ -34,11 +34,12 @@ self.onmessage = (e: MessageEvent) => {
 };
 
 function runSimulation(job: SimulationJob) {
-  // Create strategy - either custom or built-in
-  const strategy =
+  // Build a fresh strategy per game so stateful strategies (pattern cursor,
+  // seeded RNG stream) cannot leak state from one game into the next.
+  const makeStrategy = () =>
     job.customRules && job.customRules.length > 0
       ? CustomStrategyFactory.createFromRules(job.customRules, job.customStrategyName)
-      : createStrategy(job.strategyType, job.strategyParams);
+      : createStrategy(job.strategyType, job.strategyParams as StrategyFactoryParams | undefined);
 
   const results: GameResult[] = [];
   const startTime = Date.now();
@@ -47,7 +48,9 @@ function runSimulation(job: SimulationJob) {
     const seed = job.seeds[i];
     const gameStartTime = Date.now();
 
-    // Run the game
+    // Run the game with a fresh, per-game strategy instance
+    const strategy = makeStrategy();
+    strategy.reset?.(seed);
     const engine = new GameEngine(seed);
     let moveCount = 0;
     const maxMoves = 10000;
@@ -55,7 +58,8 @@ function runSimulation(job: SimulationJob) {
     while (!engine.getState().gameOver && moveCount < maxMoves) {
       const move = strategy.selectMove(engine);
       if (!move) break;
-      engine.move(move);
+      // A rejected move leaves the board unchanged; break instead of spinning.
+      if (!engine.move(move)) break;
       moveCount++;
     }
 

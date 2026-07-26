@@ -22,7 +22,9 @@ export class SeededRNG {
       hash = ((hash << 5) - hash) + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
-    return Math.abs(hash) || 1; // Ensure non-zero
+    // Use an unsigned reinterpretation rather than Math.abs so that
+    // seeds hashing to n and -n do not collapse to the same RNG stream.
+    return (hash >>> 0) || 1; // Ensure non-zero
   }
 
   /**

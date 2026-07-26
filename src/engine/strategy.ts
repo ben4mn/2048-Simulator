@@ -2,13 +2,21 @@
  * Strategy system for automated 2048 gameplay
  */
 
-import type { Board, Direction } from './types';
+import type { Board, CornerPosition, Direction } from './types';
 import { GameEngine } from './gameEngine';
+import { SeededRNG } from './rng';
 
 export interface Strategy {
   id: string;
   name: string;
   selectMove(engine: GameEngine): Direction | null;
+  /**
+   * Optional per-game reset hook. Stateful strategies (pattern cursor, seeded
+   * RNG stream) implement this so a reused instance behaves identically to a
+   * fresh one. Called by playGameWithStrategy (and the worker loop) with the
+   * seed of the game about to start.
+   */
+  reset?(seed: string): void;
 }
 
 /**
@@ -186,16 +194,33 @@ export class MergeMaxStrategy implements Strategy {
 
 /**
  * Random Strategy (Baseline)
+ * Uses a seeded RNG derived from the engine's seed so that the same seed
+ * always produces the same game (deterministic, reproducible baselines).
  */
 export class RandomStrategy implements Strategy {
   id = 'random';
   name = 'Random';
+  private rng: SeededRNG | null = null;
+  private rngSeed: string | null = null;
+
+  reset(seed: string): void {
+    this.rngSeed = seed;
+    // Derive a distinct stream from the game seed so strategy choices don't
+    // correlate with the engine's own spawn RNG.
+    this.rng = new SeededRNG(`${seed}:strategy`);
+  }
 
   selectMove(engine: GameEngine): Direction | null {
     const validMoves = engine.getValidMoves();
     if (validMoves.length === 0) return null;
 
-    return validMoves[Math.floor(Math.random() * validMoves.length)];
+    // Lazily (re)initialize when used directly against a new engine/seed.
+    const seed = engine.getSeed();
+    if (!this.rng || this.rngSeed !== seed) {
+      this.reset(seed);
+    }
+
+    return this.rng!.choice(validMoves);
   }
 }
 
@@ -212,6 +237,10 @@ export class PatternStrategy implements Strategy {
   constructor(pattern: Direction[], name?: string) {
     this.pattern = pattern;
     this.name = name || `Pattern (${pattern.join('-')})`;
+  }
+
+  reset(): void {
+    this.currentIndex = 0;
   }
 
   selectMove(engine: GameEngine): Direction | null {
@@ -285,7 +314,8 @@ export class LookAheadStrategy implements Strategy {
   private evaluateBoard: (board: Board) => number;
 
   constructor(depth: number, evaluateBoard: (board: Board) => number, name?: string) {
-    this.depth = Math.max(1, Math.min(depth, 3)); // Clamp to 1-3
+    // Honor every depth RuleValidator accepts (1-5); clamp only out-of-range input.
+    this.depth = Math.max(1, Math.min(depth, 5));
     this.evaluateBoard = evaluateBoard;
     this.name = name || `Look-Ahead (depth ${this.depth})`;
   }
@@ -331,19 +361,20 @@ export class LookAheadStrategy implements Strategy {
       return this.evaluateBoard(tempEngine.getState().board);
     }
 
-    // Otherwise, recursively evaluate next moves (expectimax style)
+    // Otherwise, recursively evaluate next moves. The player chooses the
+    // follow-up move, so each candidate is credited with the BEST reachable
+    // outcome (max over follow-ups), not the average.
     const directions: Direction[] = ['up', 'down', 'left', 'right'];
-    let totalScore = 0;
-    let validMoves = 0;
+    let bestScore = -Infinity;
 
     for (const nextDir of directions) {
       if (tempEngine.isValidMove(nextDir)) {
-        totalScore += this.evaluateMove(tempEngine, nextDir, depth - 1);
-        validMoves++;
+        const score = this.evaluateMove(tempEngine, nextDir, depth - 1);
+        if (score > bestScore) bestScore = score;
       }
     }
 
-    return validMoves > 0 ? totalScore / validMoves : this.evaluateBoard(tempEngine.getState().board);
+    return bestScore !== -Infinity ? bestScore : this.evaluateBoard(tempEngine.getState().board);
   }
 }
 
@@ -407,6 +438,12 @@ export class CustomStrategy implements Strategy {
     this.name = name || 'Custom Strategy';
   }
 
+  reset(seed: string): void {
+    for (const strategy of this.strategies) {
+      strategy.reset?.(seed);
+    }
+  }
+
   selectMove(engine: GameEngine): Direction | null {
     // Try each strategy in order
     for (const strategy of this.strategies) {
@@ -420,9 +457,25 @@ export class CustomStrategy implements Strategy {
 }
 
 /**
+ * Parameters accepted by the strategy factory. Each strategy type reads the
+ * subset of fields relevant to it (see StrategyConfig in types.ts for the
+ * per-type discriminated union).
+ */
+export interface StrategyFactoryParams {
+  name?: string;
+  priority?: Direction[];
+  corner?: CornerPosition;
+  pattern?: Direction[];
+  rules?: Array<{ condition: (board: Board) => boolean; actions: Direction[]; priority: number }>;
+  depth?: number;
+  evaluateBoard?: (board: Board) => number;
+  strategies?: Strategy[];
+}
+
+/**
  * Strategy Factory
  */
-export function createStrategy(type: string, params?: any): Strategy {
+export function createStrategy(type: string, params?: StrategyFactoryParams): Strategy {
   switch (type) {
     case 'directional_priority':
       return new DirectionalPriorityStrategy(params?.priority);
@@ -447,7 +500,7 @@ export function createStrategy(type: string, params?: any): Strategy {
     case 'custom':
       return new CustomStrategy(params?.strategies || [], params?.name);
     default:
-      return new DirectionalPriorityStrategy();
+      throw new Error(`Unknown strategy type: ${type}`);
   }
 }
 
@@ -468,11 +521,16 @@ export function playGameWithStrategy(
   const engine = new GameEngine(seed);
   let moveCount = 0;
 
+  // Reset stateful strategies so a reused instance plays like a fresh one.
+  strategy.reset?.(seed);
+
   while (!engine.getState().gameOver && moveCount < maxMoves) {
     const move = strategy.selectMove(engine);
     if (!move) break;
 
-    engine.move(move);
+    // A rejected move means the strategy is stuck (or buggy); the board did
+    // not change, so continuing would spin forever on the same position.
+    if (!engine.move(move)) break;
     moveCount++;
   }
 
