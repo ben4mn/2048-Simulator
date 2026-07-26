@@ -7,6 +7,7 @@ import { useState } from 'react';
 import type { CustomRule } from '../engine/customRules';
 import { ManualRuleBuilder } from './ManualRuleBuilder';
 import { AIStrategyAssistant } from './AIStrategyAssistant';
+import { ConfirmDialog } from './ui/ConfirmDialog';
 
 export interface CustomStrategyBuilderProps {
   onSave: (rules: CustomRule[], name: string) => void;
@@ -26,26 +27,33 @@ export function CustomStrategyBuilder({
   const [mode, setMode] = useState<TabMode>('manual');
   const [rules, setRules] = useState<CustomRule[]>(initialRules);
   const [strategyName, setStrategyName] = useState(initialName);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const handleSave = () => {
     if (rules.length === 0) {
-      alert('Please add at least one rule before saving');
+      setSaveError('Please add at least one rule before saving');
       return;
     }
 
     if (!strategyName.trim()) {
-      alert('Please enter a strategy name');
+      setSaveError('Please enter a strategy name');
       return;
     }
 
+    setSaveError(null);
     onSave(rules, strategyName);
   };
 
   const handleReset = () => {
-    if (confirm('Are you sure you want to reset all rules?')) {
-      setRules([]);
-      setStrategyName('');
-    }
+    setShowResetConfirm(true);
+  };
+
+  const confirmReset = () => {
+    setRules([]);
+    setStrategyName('');
+    setSaveError(null);
+    setShowResetConfirm(false);
   };
 
   const handleRulesUpdate = (newRules: CustomRule[]) => {
@@ -143,6 +151,11 @@ export function CustomStrategyBuilder({
       </div>
 
       <div className="px-6 py-4 border-t border-dark-border bg-surface-raised">
+        {saveError && (
+          <p role="alert" className="text-sm text-danger mb-3">
+            {saveError}
+          </p>
+        )}
         <div className="flex gap-3">
           <button
             onClick={handleSave}
@@ -164,6 +177,16 @@ export function CustomStrategyBuilder({
             Cancel
           </button>
         </div>
+
+        <ConfirmDialog
+          open={showResetConfirm}
+          title="Reset strategy?"
+          message="This clears all configured rules and the strategy name. This cannot be undone."
+          confirmLabel="Reset"
+          danger
+          onConfirm={confirmReset}
+          onCancel={() => setShowResetConfirm(false)}
+        />
       </div>
     </div>
   );

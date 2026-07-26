@@ -31,7 +31,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
           className="bg-accent h-full rounded-full transition-all duration-300 ease-out relative overflow-hidden"
           style={{ width: `${percentage}%` }}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent animate-shimmer" />
+          <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/25 to-transparent animate-shimmer" />
         </div>
       </div>
     </div>

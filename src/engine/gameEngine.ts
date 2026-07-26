@@ -4,6 +4,7 @@
  */
 
 import { SeededRNG } from './rng';
+import { getMaxTileValue } from './boardUtils';
 import type { Board, Direction, DirectionShort, GameState, MoveResult, Position } from './types';
 
 export class GameEngine {
@@ -11,10 +12,35 @@ export class GameEngine {
   private state: GameState;
   private readonly seed: string;
 
-  constructor(seed: string) {
+  constructor(seed: string, snapshot?: { rngState: number; state: GameState }) {
     this.seed = seed;
     this.rng = new SeededRNG(seed);
-    this.state = this.createInitialState();
+    if (snapshot) {
+      // Internal path used by clone(): adopt the snapshot instead of
+      // consuming RNG values to spawn the two initial tiles.
+      this.rng.setInternalState(snapshot.rngState);
+      this.state = snapshot.state;
+    } else {
+      this.state = this.createInitialState();
+    }
+  }
+
+  /**
+   * Create an independent copy of this engine: identical board, score, move
+   * history, flags, and (critically) the exact RNG stream position. The clone
+   * and the original evolve independently; the same subsequent moves produce
+   * identical spawns on both. O(1) alternative to replaying the full move
+   * history on a fresh engine.
+   */
+  clone(): GameEngine {
+    return new GameEngine(this.seed, {
+      rngState: this.rng.getInternalState(),
+      state: {
+        ...this.state,
+        board: this.copyBoard(this.state.board),
+        moves: [...this.state.moves],
+      },
+    });
   }
 
   private createInitialState(): GameState {
@@ -30,7 +56,7 @@ export class GameEngine {
       moves: [],
       gameOver: false,
       won: false,
-      maxTile: 2,
+      maxTile: getMaxTileValue(board),
     };
   }
 
@@ -111,7 +137,6 @@ export class GameEngine {
       board: finalBoard,
       score: totalMerged,
       moved,
-      merged: totalMerged,
     };
   }
 
@@ -174,7 +199,7 @@ export class GameEngine {
     changed: boolean;
   } {
     // Remove zeros
-    let tiles = line.filter(x => x !== 0);
+    const tiles = line.filter(x => x !== 0);
     let merged = 0;
     let changed = false;
 
@@ -234,19 +259,6 @@ export class GameEngine {
   }
 
   /**
-   * Get maximum tile value on the board
-   */
-  private getMaxTile(board: Board): number {
-    let max = 0;
-    for (const row of board) {
-      for (const tile of row) {
-        if (tile > max) max = tile;
-      }
-    }
-    return max;
-  }
-
-  /**
    * Make a move in the given direction
    */
   move(direction: Direction): boolean {
@@ -267,7 +279,7 @@ export class GameEngine {
     this.spawnTile(this.state.board);
 
     // Update max tile
-    this.state.maxTile = this.getMaxTile(this.state.board);
+    this.state.maxTile = getMaxTileValue(this.state.board);
 
     // Check win condition
     if (!this.state.won && this.state.maxTile >= 2048) {
@@ -291,6 +303,37 @@ export class GameEngine {
       board: this.copyBoard(this.state.board),
       moves: [...this.state.moves],
     };
+  }
+
+  /**
+   * Cheap accessor: is the game over? Avoids the deep copy getState() makes.
+   */
+  isGameOver(): boolean {
+    return this.state.gameOver;
+  }
+
+  /**
+   * Cheap accessor: current score.
+   */
+  getScore(): number {
+    return this.state.score;
+  }
+
+  /**
+   * Cheap accessor: highest tile value currently on the board.
+   */
+  getMaxTileValue(): number {
+    return this.state.maxTile;
+  }
+
+  /**
+   * Read-only view of the LIVE board — no copy is made. Callers must not
+   * mutate it and must not hold onto it across moves (the reference is
+   * replaced on every successful move). Use getState() when a stable
+   * snapshot is needed (UI, replay, persistence).
+   */
+  getBoardView(): readonly (readonly number[])[] {
+    return this.state.board;
   }
 
   /**

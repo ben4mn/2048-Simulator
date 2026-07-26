@@ -1,125 +1,234 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap')
+layer(base);
+@import 'tailwindcss';
 
-:root {
-  --color-bg: #090d14;
-  --color-surface: #121824;
-  --color-surface-raised: #1a2232;
-  --color-surface-elevated: #232d42;
-  --color-border: #2f3a54;
-  --color-text-primary: #f2f5fb;
-  --color-text-muted: #94a0ba;
-  --color-accent: #f3b25f;
-  --color-accent-strong: #f59e0b;
-  --color-success: #34d399;
-  --color-danger: #f87171;
+@theme {
+  --font-sans: 'Space Grotesk', 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, monospace;
 
-  --color-board-bg: #3c3224;
-  --color-tile-empty: rgba(255, 255, 255, 0.06);
-  --board-size: 384px;
-  --tile-font-size: 1.5rem;
+  --color-app-bg: var(--color-bg);
+
+  --color-text-primary: var(--color-text-primary);
+  --color-text-muted: var(--color-text-muted);
+
+  --color-accent: var(--color-accent);
+  --color-accent-strong: var(--color-accent-strong);
+
+  --color-success: var(--color-success);
+  --color-danger: var(--color-danger);
+
+  --color-tile-2: #eee4da;
+  --color-tile-4: #ede0c8;
+  --color-tile-8: #f2b179;
+  --color-tile-16: #f59563;
+  --color-tile-32: #f67c5f;
+  --color-tile-64: #f65e3b;
+  --color-tile-128: #edcf72;
+  --color-tile-256: #edcc61;
+  --color-tile-512: #edc850;
+  --color-tile-1024: #edc53f;
+  --color-tile-2048: #edc22e;
+  --color-tile-4096: #3c3a32;
+
+  --color-surface: var(--color-surface);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-surface-elevated: var(--color-surface-elevated);
+  --color-surface-overlay: rgba(5, 7, 11, 0.7);
+
+  --color-dark-bg: var(--color-bg);
+  --color-dark-border: var(--color-border);
+
+  --animate-tile-appear: tile-appear 150ms ease-out;
+  --animate-tile-merge: tile-merge 200ms ease-out;
+  --animate-score-pop: score-pop 300ms ease-out;
+  --animate-shimmer: shimmer 1.5s infinite;
 }
 
-@media (max-width: 767px) {
-  :root {
-    --board-size: min(calc(100vw - 2rem), calc(100vh - 14rem));
-    --tile-font-size: clamp(0.875rem, 4vw, 1.5rem);
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
   }
 }
 
-html,
-body,
-#root {
-  min-height: 100dvh;
+@utility game-board {
+  width: var(--board-size);
+  height: var(--board-size);
 }
 
-body {
-  margin: 0;
-  font-family: "Space Grotesk", "Avenir Next", Avenir, "Segoe UI", sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: var(--color-bg);
-  color: var(--color-text-primary);
-  overscroll-behavior: none;
-  overscroll-behavior-y: none;
-  touch-action: manipulation;
+@utility game-board-tile {
+  font-size: var(--tile-font-size);
 }
 
-* {
-  box-sizing: border-box;
+@utility swipe-area {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-/* Keyframe Animations */
-@keyframes board-shift-left {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(-3px); }
-}
-@keyframes board-shift-right {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(3px); }
-}
-@keyframes board-shift-up {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
-}
-@keyframes board-shift-down {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(3px); }
+@utility bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-@keyframes score-pop {
-  0% { transform: scale(1); color: inherit; }
-  50% { transform: scale(1.2); color: #f59e0b; }
-  100% { transform: scale(1); color: inherit; }
+@utility board-overlay {
+  animation: overlay-fade 400ms ease-out forwards;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
-@keyframes overlay-fade {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
-}
-
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-@keyframes tile-appear {
-  0% { transform: scale(0); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-@keyframes tile-merge {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.15); }
-  100% { transform: scale(1); }
-}
-
-/* Utility Classes */
 @layer utilities {
-  .game-board {
-    width: var(--board-size);
-    height: var(--board-size);
+  :root {
+    --color-bg: #090d14;
+    --color-surface: #121824;
+    --color-surface-raised: #1a2232;
+    --color-surface-elevated: #232d42;
+    --color-border: #2f3a54;
+    --color-text-primary: #f2f5fb;
+    --color-text-muted: #94a0ba;
+    --color-accent: #f3b25f;
+    --color-accent-strong: #f59e0b;
+    --color-success: #34d399;
+    --color-danger: #f87171;
+
+    --color-board-bg: #3c3224;
+    --color-tile-empty: rgba(255, 255, 255, 0.06);
+    --board-size: 384px;
+    --tile-font-size: 1.5rem;
   }
 
-  .game-board-tile {
-    font-size: var(--tile-font-size);
+  @media (max-width: 767px) {
+    :root {
+      --board-size: min(calc(100vw - 2rem), calc(100vh - 14rem));
+      --tile-font-size: clamp(0.875rem, 4vw, 1.5rem);
+    }
   }
 
-  .swipe-area {
-    touch-action: none;
-    user-select: none;
-    -webkit-user-select: none;
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
   }
 
-  .bottom-nav {
-    padding-bottom: env(safe-area-inset-bottom);
+  body {
+    margin: 0;
+    font-family: 'Space Grotesk', 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    touch-action: manipulation;
   }
 
-  .board-overlay {
-    animation: overlay-fade 400ms ease-out forwards;
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
+  * {
+    box-sizing: border-box;
   }
+
+  /* Keyframe Animations */
+  @keyframes board-shift-left {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(-3px);
+    }
+  }
+  @keyframes board-shift-right {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(3px);
+    }
+  }
+  @keyframes board-shift-up {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+  @keyframes board-shift-down {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(3px);
+    }
+  }
+
+  @keyframes score-pop {
+    0% {
+      transform: scale(1);
+      color: inherit;
+    }
+    50% {
+      transform: scale(1.2);
+      color: #f59e0b;
+    }
+    100% {
+      transform: scale(1);
+      color: inherit;
+    }
+  }
+
+  @keyframes overlay-fade {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes tile-appear {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes tile-merge {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.15);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  /* Utility Classes */
 }

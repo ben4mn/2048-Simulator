@@ -24,9 +24,8 @@ export interface GameState {
 
 export interface MoveResult {
   board: Board;
-  score: number;
+  score: number; // Points gained from merges
   moved: boolean; // Did the board change?
-  merged: number; // Points gained from merges
 }
 
 export interface GameResult {
@@ -43,9 +42,32 @@ export interface GameResult {
   durationMs: number;
 }
 
-export interface StrategyConfig {
+export type CornerPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+/** Rule shape consumed by ConditionalStrategy. */
+export interface ConditionalStrategyRule {
+  condition: (board: Board) => boolean;
+  actions: Direction[];
+  priority: number;
+}
+
+/** Minimal structural view of a Strategy (avoids a runtime import cycle). */
+interface StrategyLike {
   id: string;
   name: string;
-  type: 'directional' | 'corner_anchor' | 'hybrid' | 'random';
-  params: Record<string, any>;
 }
+
+/**
+ * Discriminated union of strategy configurations, matching the types and
+ * params accepted by createStrategy() in strategy.ts.
+ */
+export type StrategyConfig =
+  | { id: string; name: string; type: 'directional_priority'; params?: { priority?: Direction[] } }
+  | { id: string; name: string; type: 'corner_anchor'; params?: { corner?: CornerPosition } }
+  | { id: string; name: string; type: 'merge_max' }
+  | { id: string; name: string; type: 'random' }
+  | { id: string; name: string; type: 'pattern'; params?: { pattern?: Direction[]; name?: string } }
+  | { id: string; name: string; type: 'conditional'; params?: { rules?: ConditionalStrategyRule[]; name?: string } }
+  | { id: string; name: string; type: 'lookahead'; params?: { depth?: number; evaluateBoard?: (board: Board) => number; name?: string } }
+  | { id: string; name: string; type: 'weighted'; params?: { evaluateBoard?: (board: Board) => number; name?: string } }
+  | { id: string; name: string; type: 'custom'; params?: { strategies?: StrategyLike[]; name?: string } };

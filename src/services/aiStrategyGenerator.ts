@@ -3,7 +3,13 @@
  * Converts natural language descriptions into 2048 strategy rules
  */
 
-import type { CustomRule } from '../engine/customRules';
+import type {
+  ConditionParams,
+  ConditionType,
+  CustomRule,
+  EvaluationWeights,
+} from '../engine/customRules';
+import type { Direction } from '../engine/types';
 
 export type AIProvider = 'openai' | 'anthropic';
 
@@ -24,6 +30,38 @@ export interface GenerateStrategyResponse {
   strategyName?: string;
   error?: string;
 }
+
+/** Default model IDs (current as of 2026). */
+export const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5';
+
+/** Mirrors the ConditionType union in src/engine/customRules.ts. */
+export const CONDITION_TYPES = [
+  'max_tile_in_corner',
+  'max_tile_on_edge',
+  'empty_cells_count',
+  'merge_available',
+  'monotonic_rows',
+  'monotonic_cols',
+] as const satisfies readonly ConditionType[];
+
+const VALID_CORNERS = [
+  'top-left',
+  'top-right',
+  'bottom-left',
+  'bottom-right',
+] as const;
+
+const DIRECTIONS = ['up', 'down', 'left', 'right'] as const;
+
+const WEIGHT_KEYS: readonly (keyof EvaluationWeights)[] = [
+  'emptyTiles',
+  'maxTileValue',
+  'maxTileCorner',
+  'mergeCount',
+  'monotonicity',
+  'smoothness',
+];
 
 const SYSTEM_PROMPT = `You are a 2048 game strategy designer. Convert user descriptions into JSON rule configurations.
 
@@ -104,7 +142,12 @@ export class AIStrategyGenerator {
         };
       }
 
-      let response: any;
+      const keyError = this.checkApiKeyPrefix(provider, apiKey);
+      if (keyError) {
+        return { success: false, error: keyError };
+      }
+
+      let response: string;
 
       if (provider === 'openai') {
         response = await this.callOpenAI(request.description, apiKey, model);
@@ -113,7 +156,7 @@ export class AIStrategyGenerator {
       } else {
         return {
           success: false,
-          error: `Unsupported provider: ${provider}`,
+          error: `Unsupported provider: ${String(provider)}`,
         };
       }
 
@@ -138,6 +181,76 @@ export class AIStrategyGenerator {
   }
 
   /**
+   * Sanity-check the API key prefix against the selected provider.
+   * Only rejects keys that clearly belong to the OTHER provider so that
+   * non-standard keys (proxies, test keys) still work.
+   */
+  private static checkApiKeyPrefix(provider: AIProvider, apiKey: string): string | null {
+    if (provider === 'openai' && apiKey.startsWith('sk-ant-')) {
+      return 'This looks like an Anthropic API key (starts with "sk-ant-"). OpenAI keys start with "sk-". Please check the selected provider or the key.';
+    }
+    if (
+      provider === 'anthropic' &&
+      apiKey.startsWith('sk-') &&
+      !apiKey.startsWith('sk-ant-')
+    ) {
+      return 'This looks like an OpenAI API key. Anthropic keys start with "sk-ant-". Please check the selected provider or the key.';
+    }
+    return null;
+  }
+
+  /**
+   * Wrap fetch so network/CORS-level failures (TypeError) produce a readable message.
+   */
+  private static async safeFetch(
+    providerName: string,
+    url: string,
+    init: RequestInit
+  ): Promise<Response> {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error(
+          `Could not reach the ${providerName} API (network or CORS error). Check your internet connection; some networks and browser extensions block direct API access.`
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Build a readable error from a non-OK response without assuming the body is JSON.
+   */
+  private static async extractApiError(
+    providerName: string,
+    response: Response,
+    fallbackModel: string
+  ): Promise<string> {
+    let message: string | undefined;
+    try {
+      const body: unknown = await response.json();
+      if (body && typeof body === 'object') {
+        const err = (body as { error?: { message?: unknown } }).error;
+        if (err && typeof err.message === 'string') {
+          message = err.message;
+        }
+      }
+    } catch {
+      // Body was not JSON (e.g. an HTML error page from a WAF/proxy).
+    }
+
+    if (response.status === 404) {
+      return `${providerName} API returned 404 (model not found). The model "${fallbackModel}" may have been retired — please choose another model.${message ? ` Details: ${message}` : ''}`;
+    }
+
+    return (
+      message ||
+      `${providerName} API request failed (${response.status}${response.statusText ? ` ${response.statusText}` : ''})`
+    );
+  }
+
+  /**
    * Call OpenAI API
    */
   private static async callOpenAI(
@@ -145,30 +258,36 @@ export class AIStrategyGenerator {
     apiKey: string,
     model?: string
   ): Promise<string> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const usedModel = model || DEFAULT_OPENAI_MODEL;
+    const response = await this.safeFetch('OpenAI', 'https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: model || 'gpt-4o-mini',
+        model: usedModel,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: description },
         ],
-        temperature: 0.7,
-        max_tokens: 2000,
+        response_format: { type: 'json_object' },
+        max_completion_tokens: 2000,
       }),
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || 'OpenAI API request failed');
+      throw new Error(await this.extractApiError('OpenAI', response, usedModel));
     }
 
-    const data = await response.json();
-    return data.choices[0].message.content;
+    const data = (await response.json()) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const content = data.choices?.[0]?.message?.content;
+    if (typeof content !== 'string') {
+      throw new Error('OpenAI API returned an unexpected response shape');
+    }
+    return content;
   }
 
   /**
@@ -179,15 +298,17 @@ export class AIStrategyGenerator {
     apiKey: string,
     model?: string
   ): Promise<string> {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const usedModel = model || DEFAULT_ANTHROPIC_MODEL;
+    const response = await this.safeFetch('Anthropic', 'https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: model || 'claude-3-5-sonnet-20241022',
+        model: usedModel,
         max_tokens: 2000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: description }],
@@ -195,12 +316,59 @@ export class AIStrategyGenerator {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || 'Anthropic API request failed');
+      throw new Error(await this.extractApiError('Anthropic', response, usedModel));
     }
 
-    const data = await response.json();
-    return data.content[0].text;
+    const data = (await response.json()) as {
+      content?: { text?: string }[];
+    };
+    const text = data.content?.[0]?.text;
+    if (typeof text !== 'string') {
+      throw new Error('Anthropic API returned an unexpected response shape');
+    }
+    return text;
+  }
+
+  /**
+   * Extract the JSON payload from an AI response that may contain prose
+   * and/or markdown code fences anywhere in the text.
+   */
+  private static extractJson(responseText: string): string {
+    const text = responseText.trim();
+
+    // Prefer a fenced code block, wherever it appears.
+    const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+    if (fenceMatch && fenceMatch[1]?.trim()) {
+      return fenceMatch[1].trim();
+    }
+
+    // Otherwise take the first balanced {...} block, tracking strings/escapes.
+    const start = text.indexOf('{');
+    if (start !== -1) {
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      for (let i = start; i < text.length; i++) {
+        const ch = text[i];
+        if (escaped) {
+          escaped = false;
+        } else if (inString) {
+          if (ch === '\\') escaped = true;
+          else if (ch === '"') inString = false;
+        } else if (ch === '"') {
+          inString = true;
+        } else if (ch === '{') {
+          depth++;
+        } else if (ch === '}') {
+          depth--;
+          if (depth === 0) {
+            return text.slice(start, i + 1);
+          }
+        }
+      }
+    }
+
+    return text;
   }
 
   /**
@@ -208,20 +376,22 @@ export class AIStrategyGenerator {
    */
   private static parseAIResponse(responseText: string): GenerateStrategyResponse {
     try {
-      // Extract JSON from response (handle markdown code blocks)
-      let jsonText = responseText.trim();
+      const jsonText = this.extractJson(responseText);
+      const parsed: unknown = JSON.parse(jsonText);
 
-      // Remove markdown code blocks if present
-      if (jsonText.startsWith('```')) {
-        const matches = jsonText.match(/```(?:json)?\s*\n([\s\S]*?)\n```/);
-        if (matches && matches[1]) {
-          jsonText = matches[1];
-        }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return {
+          success: false,
+          error: 'Response must be a JSON object with a rules array',
+        };
       }
 
-      const parsed = JSON.parse(jsonText);
+      const { rules, strategyName } = parsed as {
+        rules?: unknown;
+        strategyName?: unknown;
+      };
 
-      if (!parsed.rules || !Array.isArray(parsed.rules)) {
+      if (!Array.isArray(rules)) {
         return {
           success: false,
           error: 'Response must contain a rules array',
@@ -230,7 +400,7 @@ export class AIStrategyGenerator {
 
       // Validate rules
       const validatedRules: CustomRule[] = [];
-      for (const rule of parsed.rules) {
+      for (const rule of rules) {
         if (!this.isValidRule(rule)) {
           return {
             success: false,
@@ -243,7 +413,10 @@ export class AIStrategyGenerator {
       return {
         success: true,
         rules: validatedRules,
-        strategyName: parsed.strategyName || 'AI Generated Strategy',
+        strategyName:
+          typeof strategyName === 'string' && strategyName.trim()
+            ? strategyName
+            : 'AI Generated Strategy',
       };
     } catch (error) {
       return {
@@ -253,39 +426,72 @@ export class AIStrategyGenerator {
     }
   }
 
+  private static isDirection(value: unknown): value is Direction {
+    return typeof value === 'string' && (DIRECTIONS as readonly string[]).includes(value);
+  }
+
+  private static isDirectionArray(value: unknown): value is Direction[] {
+    return Array.isArray(value) && value.length > 0 && value.every((d) => this.isDirection(d));
+  }
+
+  private static isConditionType(value: unknown): value is ConditionType {
+    return (
+      typeof value === 'string' && (CONDITION_TYPES as readonly string[]).includes(value)
+    );
+  }
+
+  private static isValidWeights(value: unknown): value is EvaluationWeights {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const weights = value as Record<string, unknown>;
+    return WEIGHT_KEYS.every((key) => Number.isFinite(weights[key]));
+  }
+
+  private static isValidConditionParams(value: unknown): value is ConditionParams {
+    if (value === undefined) return true;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const params = value as Record<string, unknown>;
+    if (
+      params.corner !== undefined &&
+      !(VALID_CORNERS as readonly string[]).includes(params.corner as string)
+    ) {
+      return false;
+    }
+    if (params.threshold !== undefined && !Number.isFinite(params.threshold)) {
+      return false;
+    }
+    return true;
+  }
+
   /**
    * Validate rule structure
    */
-  private static isValidRule(rule: any): rule is CustomRule {
+  private static isValidRule(rule: unknown): rule is CustomRule {
     if (!rule || typeof rule !== 'object') return false;
+    const candidate = rule as Record<string, unknown>;
 
-    switch (rule.type) {
+    switch (candidate.type) {
       case 'pattern':
-        return (
-          Array.isArray(rule.sequence) &&
-          rule.sequence.length > 0 &&
-          rule.sequence.every((d: any) => ['up', 'down', 'left', 'right'].includes(d))
-        );
+        return this.isDirectionArray(candidate.sequence);
 
       case 'conditional':
         return (
-          typeof rule.condition === 'string' &&
-          Array.isArray(rule.action) &&
-          rule.action.every((d: any) => ['up', 'down', 'left', 'right'].includes(d)) &&
-          typeof rule.priority === 'number'
+          this.isConditionType(candidate.condition) &&
+          this.isValidConditionParams(candidate.conditionParams) &&
+          this.isDirectionArray(candidate.action) &&
+          typeof candidate.priority === 'number' &&
+          Number.isFinite(candidate.priority)
         );
 
       case 'lookahead':
         return (
-          typeof rule.depth === 'number' &&
-          rule.depth >= 1 &&
-          rule.depth <= 5 &&
-          rule.evaluationWeights &&
-          typeof rule.evaluationWeights === 'object'
+          typeof candidate.depth === 'number' &&
+          candidate.depth >= 1 &&
+          candidate.depth <= 5 &&
+          this.isValidWeights(candidate.evaluationWeights)
         );
 
       case 'weighted':
-        return rule.weights && typeof rule.weights === 'object';
+        return this.isValidWeights(candidate.weights);
 
       default:
         return false;

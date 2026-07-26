@@ -4,6 +4,7 @@
  */
 
 import type { Board, Direction } from './types';
+import { countEmptyTiles, countMerges, findMaxTile } from './boardUtils';
 
 // ===== Rule Type Definitions =====
 
@@ -17,7 +18,7 @@ export interface PatternRule {
 export interface ConditionalRule {
   type: 'conditional';
   condition: ConditionType;
-  conditionParams?: any;
+  conditionParams?: ConditionParams;
   action: Direction[];
   priority: number; // Higher = evaluated first
 }
@@ -78,34 +79,14 @@ export class BoardEvaluator {
    * Count empty tiles on the board
    */
   static countEmptyTiles(board: Board): number {
-    let count = 0;
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 4; col++) {
-        if (board[row][col] === 0) count++;
-      }
-    }
-    return count;
+    return countEmptyTiles(board);
   }
 
   /**
    * Get the maximum tile value and its position
    */
   static getMaxTile(board: Board): { value: number; row: number; col: number } {
-    let maxValue = 0;
-    let maxRow = 0;
-    let maxCol = 0;
-
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 4; col++) {
-        if (board[row][col] > maxValue) {
-          maxValue = board[row][col];
-          maxRow = row;
-          maxCol = col;
-        }
-      }
-    }
-
-    return { value: maxValue, row: maxRow, col: maxCol };
+    return findMaxTile(board);
   }
 
   /**
@@ -138,34 +119,18 @@ export class BoardEvaluator {
         return row === 3 && col === 0;
       case 'bottom-right':
         return row === 3 && col === 3;
+      default:
+        return false;
     }
   }
 
   /**
-   * Count potential merges on the board
+   * Count potential merges on the board.
+   * Tiles separated only by empty cells can merge when the line slides
+   * (e.g. [2, 0, 2] is one potential merge), so empties are looked through.
    */
   static countMerges(board: Board): number {
-    let count = 0;
-
-    // Horizontal merges
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 3; col++) {
-        if (board[row][col] !== 0 && board[row][col] === board[row][col + 1]) {
-          count++;
-        }
-      }
-    }
-
-    // Vertical merges
-    for (let col = 0; col < 4; col++) {
-      for (let row = 0; row < 3; row++) {
-        if (board[row][col] !== 0 && board[row][col] === board[row + 1][col]) {
-          count++;
-        }
-      }
-    }
-
-    return count;
+    return countMerges(board);
   }
 
   /**
@@ -173,9 +138,14 @@ export class BoardEvaluator {
    * Measures how well tiles are arranged in ascending/descending order
    */
   static calculateMonotonicity(board: Board): number {
-    let score = 0;
+    return this.calculateRowMonotonicity(board) + this.calculateColMonotonicity(board);
+  }
 
-    // Check rows
+  /**
+   * Row-only monotonicity score (max 12: 3 ordered pairs per row x 4 rows)
+   */
+  static calculateRowMonotonicity(board: Board): number {
+    let score = 0;
     for (let row = 0; row < 4; row++) {
       let increasing = 0;
       let decreasing = 0;
@@ -189,8 +159,14 @@ export class BoardEvaluator {
       }
       score += Math.max(increasing, decreasing);
     }
+    return score;
+  }
 
-    // Check columns
+  /**
+   * Column-only monotonicity score (max 12: 3 ordered pairs per column x 4 columns)
+   */
+  static calculateColMonotonicity(board: Board): number {
+    let score = 0;
     for (let col = 0; col < 4; col++) {
       let increasing = 0;
       let decreasing = 0;
@@ -204,7 +180,6 @@ export class BoardEvaluator {
       }
       score += Math.max(increasing, decreasing);
     }
-
     return score;
   }
 
@@ -293,13 +268,17 @@ export class ConditionEvaluator {
       }
 
       case 'monotonic_rows': {
-        const monotonicity = BoardEvaluator.calculateMonotonicity(board);
-        return monotonicity > (params?.threshold || 12); // Arbitrary threshold
+        const monotonicity = BoardEvaluator.calculateRowMonotonicity(board);
+        const threshold = params?.threshold;
+        // Explicit threshold: strictly exceed it (so 0 means "any monotonicity").
+        // Default: rows are fully monotonic (3 ordered pairs x 4 rows = 12).
+        return threshold !== undefined ? monotonicity > threshold : monotonicity >= 12;
       }
 
       case 'monotonic_cols': {
-        const monotonicity = BoardEvaluator.calculateMonotonicity(board);
-        return monotonicity > (params?.threshold || 12);
+        const monotonicity = BoardEvaluator.calculateColMonotonicity(board);
+        const threshold = params?.threshold;
+        return threshold !== undefined ? monotonicity > threshold : monotonicity >= 12;
       }
 
       default:
@@ -375,8 +354,13 @@ export class RuleValidator {
         return this.validateLookAheadRule(rule);
       case 'weighted':
         return this.validateWeightedRule(rule);
-      default:
+      default: {
+        // Exhaustiveness guard: adding a new CustomRule variant without a
+        // case above makes this assignment a compile error.
+        const unhandled: never = rule;
+        void unhandled;
         return 'Unknown rule type';
+      }
     }
   }
 }

@@ -27,9 +27,26 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
     return false;
   };
 
+  const checkKeyPrefix = (key: string): string | null => {
+    if (provider === 'openai' && !key.startsWith('sk-')) {
+      return 'That does not look like an OpenAI API key — OpenAI keys start with "sk-".';
+    }
+    if (provider === 'anthropic' && !key.startsWith('sk-ant-')) {
+      return 'That does not look like an Anthropic API key — Anthropic keys start with "sk-ant-".';
+    }
+    return null;
+  };
+
   const saveApiKey = () => {
-    if (apiKey.trim()) {
-      sessionStorage.setItem(`ai_${provider}_key`, apiKey.trim());
+    const trimmed = apiKey.trim();
+    if (trimmed) {
+      const prefixError = checkKeyPrefix(trimmed);
+      if (prefixError) {
+        setError(prefixError);
+        return;
+      }
+      sessionStorage.setItem(`ai_${provider}_key`, trimmed);
+      setError(null);
       setShowApiKeyInput(false);
     }
   };
@@ -156,6 +173,12 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
             </button>
             <p className="text-xs text-text-muted">
               Your API key is stored in session storage and will be cleared when you close the browser.
+            </p>
+            <p className="text-xs text-amber-200 bg-amber-500/10 border border-accent/35 rounded-lg p-2">
+              Warning: your API key is sent directly from this browser to the AI provider and kept
+              in sessionStorage for this tab. Anyone with access to this browser session (including
+              malicious browser extensions) could read it. Use a low-limit key you can revoke, and
+              avoid entering keys on shared computers.
             </p>
           </div>
         )}
