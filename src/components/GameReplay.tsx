@@ -29,6 +29,8 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
 
   useEffect(() => {
     sessionRef.current = new ReplaySession(seed, moveArray);
+    // TODO(stage-5): move replay-session reset out of this effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentMove(0);
     setGameState(sessionRef.current.seek(0));
   }, [seed, moveArray]);

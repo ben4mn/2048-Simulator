@@ -16,17 +16,17 @@ interface GameBoardProps {
 
 const getTileColor = (value: number): string => {
   const colors: Record<number, string> = {
-    2: 'bg-[#eee4da] text-gray-700',
-    4: 'bg-[#ede0c8] text-gray-700',
-    8: 'bg-[#f2b179] text-white',
-    16: 'bg-[#f59563] text-white',
-    32: 'bg-[#f67c5f] text-white',
-    64: 'bg-[#f65e3b] text-white',
-    128: 'bg-[#edcf72] text-white',
-    256: 'bg-[#edcc61] text-white',
-    512: 'bg-[#edc850] text-white',
-    1024: 'bg-[#edc53f] text-white text-sm',
-    2048: 'bg-[#edc22e] text-white',
+    2: 'bg-tile-2 text-gray-700',
+    4: 'bg-tile-4 text-gray-700',
+    8: 'bg-tile-8 text-white',
+    16: 'bg-tile-16 text-white',
+    32: 'bg-tile-32 text-white',
+    64: 'bg-tile-64 text-white',
+    128: 'bg-tile-128 text-white',
+    256: 'bg-tile-256 text-white',
+    512: 'bg-tile-512 text-white',
+    1024: 'bg-tile-1024 text-white text-sm',
+    2048: 'bg-tile-2048 text-white',
     4096: 'bg-[#3c3a32] text-white',
   };
 

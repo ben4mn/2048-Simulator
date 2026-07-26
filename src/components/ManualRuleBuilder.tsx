@@ -324,20 +324,20 @@ export function ManualRuleBuilder({ rules, onRulesChange }: ManualRuleBuilderPro
                   <button
                     onClick={() => handleMoveRule(index, 'up')}
                     disabled={index === 0}
-                    className="px-2 py-1 text-sm bg-surface-elevated rounded border border-dark-border hover:bg-surface disabled:opacity-30"
+                    className="px-2 py-1 text-sm bg-surface-elevated rounded-sm border border-dark-border hover:bg-surface disabled:opacity-30"
                   >
                     ↑
                   </button>
                   <button
                     onClick={() => handleMoveRule(index, 'down')}
                     disabled={index === rules.length - 1}
-                    className="px-2 py-1 text-sm bg-surface-elevated rounded border border-dark-border hover:bg-surface disabled:opacity-30"
+                    className="px-2 py-1 text-sm bg-surface-elevated rounded-sm border border-dark-border hover:bg-surface disabled:opacity-30"
                   >
                     ↓
                   </button>
                   <button
                     onClick={() => handleRemoveRule(index)}
-                    className="px-3 py-1 text-sm bg-red-500/20 text-red-200 rounded hover:bg-red-500/30"
+                    className="px-3 py-1 text-sm bg-red-500/20 text-red-200 rounded-sm hover:bg-red-500/30"
                   >
                     Remove
                   </button>

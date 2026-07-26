@@ -115,7 +115,7 @@ function App() {
 
   if (!gameState || !engine) {
     return (
-      <div className="min-h-[100dvh] bg-app-bg flex items-center justify-center">
+      <div className="min-h-dvh bg-app-bg flex items-center justify-center">
         <div className="text-lg font-medium text-text-muted">Loading game engine...</div>
       </div>
     )
@@ -132,9 +132,9 @@ function App() {
   const isGameEnded = gameState.gameOver || gameState.won
 
   return (
-    <div className="min-h-[100dvh] bg-app-bg text-text-primary relative overflow-x-hidden">
+    <div className="min-h-dvh bg-app-bg text-text-primary relative overflow-x-hidden">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-48 left-1/2 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-amber-500/10 blur-3xl" />
+        <div className="absolute -top-48 left-1/2 h-112 w-md -translate-x-1/2 rounded-full bg-amber-500/10 blur-3xl" />
         <div className="absolute top-1/3 -left-36 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" />
       </div>
 
@@ -145,7 +145,7 @@ function App() {
         </header>
 
         <div className="max-w-6xl mx-auto mb-6 hidden md:block">
-          <div className="flex justify-center gap-2 rounded-2xl border border-dark-border bg-surface backdrop-blur-sm p-2">
+          <div className="flex justify-center gap-2 rounded-2xl border border-dark-border bg-surface backdrop-blur-xs p-2">
             <button
               onClick={() => setViewMode('play')}
               className={`px-6 py-3 font-semibold rounded-xl transition-all ${

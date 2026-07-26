@@ -27,6 +27,8 @@ export const BatchResultsGrid: React.FC<BatchResultsGridProps> = ({
   const [sortDesc, setSortDesc] = useState(true);
 
   useEffect(() => {
+    // TODO(stage-5): derive page reset during render instead of via effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(0);
   }, [results]);
 
@@ -132,7 +134,7 @@ export const BatchResultsGrid: React.FC<BatchResultsGridProps> = ({
           <button
             onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
             disabled={currentPage === 0}
-            className="px-3 py-1 bg-surface-raised text-text-primary rounded border border-dark-border disabled:opacity-50"
+            className="px-3 py-1 bg-surface-raised text-text-primary rounded-sm border border-dark-border disabled:opacity-50"
           >
             Previous
           </button>
@@ -142,7 +144,7 @@ export const BatchResultsGrid: React.FC<BatchResultsGridProps> = ({
           <button
             onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
             disabled={currentPage === totalPages - 1}
-            className="px-3 py-1 bg-surface-raised text-text-primary rounded border border-dark-border disabled:opacity-50"
+            className="px-3 py-1 bg-surface-raised text-text-primary rounded-sm border border-dark-border disabled:opacity-50"
           >
             Next
           </button>
@@ -203,7 +205,7 @@ const GameResultCard: React.FC<{
               e.stopPropagation();
               onPlaySeed(result.seed);
             }}
-            className="w-full mt-2 px-2 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-100 text-xs font-semibold rounded transition-colors"
+            className="w-full mt-2 px-2 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-100 text-xs font-semibold rounded-sm transition-colors"
           >
             Play This Seed
           </button>

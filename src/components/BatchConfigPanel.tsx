@@ -243,7 +243,7 @@ export const BatchConfigPanel: React.FC<BatchConfigPanelProps> = ({
                 </button>
                 <button
                   onClick={() => void deleteCustomStrategy(strategy.id)}
-                  className="ml-2 p-1.5 text-danger hover:text-red-200 hover:bg-red-500/15 rounded transition-colors"
+                  className="ml-2 p-1.5 text-danger hover:text-red-200 hover:bg-red-500/15 rounded-sm transition-colors"
                   title="Delete strategy"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
