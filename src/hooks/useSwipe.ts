@@ -47,6 +47,9 @@ export function useSwipe({
 
     const handleTouchStart = (e: TouchEvent) => {
       if (!enabledRef.current) return;
+      // Non-passive + preventDefault stops the browser from starting a
+      // scroll at touch start (mobile scroll-jiggle fix).
+      e.preventDefault();
       const touch = e.touches[0];
       touchStart.current = {
         x: touch.clientX,
@@ -82,11 +85,13 @@ export function useSwipe({
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!enabledRef.current || !touchStart.current) return;
+      // No touchStart guard: block scroll for the whole gesture while the
+      // swipe area is enabled (mobile scroll-jiggle fix).
+      if (!enabledRef.current) return;
       e.preventDefault();
     };
 
-    el.addEventListener('touchstart', handleTouchStart, { passive: true });
+    el.addEventListener('touchstart', handleTouchStart, { passive: false });
     el.addEventListener('touchmove', handleTouchMove, { passive: false });
     el.addEventListener('touchend', handleTouchEnd, { passive: true });
     el.addEventListener('touchcancel', handleTouchEnd, { passive: true });
