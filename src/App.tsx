@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useGameStore } from './store/gameStore'
+import { useAuthStore } from './store/authStore'
 import { useShallow } from 'zustand/react/shallow'
 import PlayView from './components/views/PlayView'
 import BatchView from './components/views/BatchView'
@@ -43,6 +44,9 @@ function App() {
     const { initialize, startNewGame } = useGameStore.getState()
     initialize()
     startNewGame()
+    // Auth is optional and independent of the simulator: a missing/unreachable
+    // backend resolves to status 'anon' without blocking anything above.
+    void useAuthStore.getState().refresh()
   }, [])
 
   // Attach the keydown listener exactly once and read the latest view/game

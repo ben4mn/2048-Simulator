@@ -12,6 +12,8 @@ class FakeWorker {
   static instances: FakeWorker[] = [];
   terminated = false;
   onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: ErrorEvent) => void) | null = null;
+  onmessageerror: ((event: MessageEvent) => void) | null = null;
   readonly url: string;
 
   constructor(url: URL | string) {
@@ -261,5 +263,157 @@ describe('gameStore delta progress messages', () => {
     // And IndexedDB holds all four games for the batch.
     const persisted = await db.getGamesByBatch(batchId as string);
     expect(persisted.map((g) => g.id).sort()).toEqual(['g1', 'g2', 'g3', 'g4']);
+  });
+});
+
+describe('gameStore compare-mode orchestration', () => {
+  beforeEach(async () => {
+    (globalThis as any).indexedDB = new IDBFactory();
+    await db.init();
+
+    FakeWorker.instances = [];
+    vi.stubGlobal('Worker', FakeWorker as unknown as typeof Worker);
+
+    useGameStore.setState({
+      worker: null,
+      isRunningBatch: false,
+      isRunningComparison: false,
+      comparisonId: null,
+      compareBatchIdA: null,
+      compareBatchIdB: null,
+      selectedComparisonId: null,
+      comparisonBatchA: null,
+      comparisonBatchB: null,
+      comparisonResultsA: [],
+      comparisonResultsB: [],
+      batchProgress: 0,
+      batchTotal: 0,
+      currentBatchId: null,
+      storageError: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const makeResult = (id: string, batchId: string, seed: string, finalScore: number) => ({
+    id,
+    batchId,
+    strategyId: 'strategy-1',
+    seed,
+    moves: 'L',
+    finalScore,
+    maxTile: 4,
+    moveCount: 1,
+    result: 'loss' as const,
+    timestamp: Date.now(),
+    durationMs: 10,
+  });
+
+  it('runs strategy A then strategy B sequentially on identical seeds, reusing a single worker at a time', async () => {
+    useGameStore.getState().startComparisonSimulation(
+      { strategyType: 'directional_priority' },
+      { strategyType: 'merge_max' },
+      { batchSize: 2 }
+    );
+
+    expect(useGameStore.getState().isRunningComparison).toBe(true);
+    const comparisonId = useGameStore.getState().comparisonId;
+    expect(comparisonId).toMatch(/^cmp_/);
+
+    await flush();
+    expect(FakeWorker.instances).toHaveLength(1);
+    const workerA = FakeWorker.instances[0];
+    const batchIdA = useGameStore.getState().currentBatchId as string;
+
+    // Same seeds are threaded to both sides; grab them off the saved batch.
+    const savedBatchA = await db.getBatch(batchIdA);
+    expect(savedBatchA?.seedMode).toBe('shared');
+    expect(savedBatchA?.comparisonId).toBe(comparisonId);
+    const seeds = savedBatchA!.seeds;
+    expect(seeds).toHaveLength(2);
+
+    workerA.onmessage?.({
+      data: {
+        jobId: 'job_1',
+        completed: 2,
+        total: 2,
+        results: [
+          makeResult('a1', batchIdA, seeds[0], 500),
+          makeResult('a2', batchIdA, seeds[1], 100),
+        ],
+      },
+    } as MessageEvent);
+
+    // Batch A completes and batch B starts — only one worker alive at a time.
+    await vi.waitFor(() => {
+      expect(FakeWorker.instances).toHaveLength(2);
+    });
+    expect(workerA.terminated).toBe(true);
+    expect(useGameStore.getState().compareBatchIdA).toBe(batchIdA);
+
+    const workerB = FakeWorker.instances[1];
+    const batchIdB = useGameStore.getState().currentBatchId as string;
+    expect(batchIdB).not.toBe(batchIdA);
+
+    const savedBatchB = await db.getBatch(batchIdB);
+    expect(savedBatchB?.comparisonId).toBe(comparisonId);
+    expect(savedBatchB?.seeds).toEqual(seeds);
+
+    workerB.onmessage?.({
+      data: {
+        jobId: 'job_2',
+        completed: 2,
+        total: 2,
+        results: [
+          makeResult('b1', batchIdB, seeds[0], 200),
+          makeResult('b2', batchIdB, seeds[1], 400),
+        ],
+      },
+    } as MessageEvent);
+
+    await vi.waitFor(() => {
+      expect(useGameStore.getState().isRunningComparison).toBe(false);
+      expect(useGameStore.getState().selectedComparisonId).toBe(comparisonId);
+    });
+
+    expect(useGameStore.getState().compareBatchIdB).toBe(batchIdB);
+    expect(useGameStore.getState().comparisonResultsA.map((r) => r.id).sort()).toEqual(['a1', 'a2']);
+    expect(useGameStore.getState().comparisonResultsB.map((r) => r.id).sort()).toEqual(['b1', 'b2']);
+  });
+
+  it('does not start batch B when batch A fails', async () => {
+    useGameStore.getState().startComparisonSimulation(
+      { strategyType: 'directional_priority' },
+      { strategyType: 'merge_max' },
+      { batchSize: 1 }
+    );
+
+    await flush();
+    const workerA = FakeWorker.instances[0];
+    workerA.onerror?.({ message: 'boom' } as ErrorEvent);
+
+    await vi.waitFor(() => {
+      expect(useGameStore.getState().isRunningComparison).toBe(false);
+    });
+
+    expect(FakeWorker.instances).toHaveLength(1);
+    expect(useGameStore.getState().selectedComparisonId).toBeNull();
+  });
+
+  it('selectComparisonPair(null) clears the selected comparison state', async () => {
+    useGameStore.setState({
+      selectedComparisonId: 'cmp_x',
+      comparisonResultsA: [makeResult('a', 'b', 'S', 1)],
+      comparisonResultsB: [makeResult('b', 'b', 'S', 1)],
+    });
+
+    await useGameStore.getState().selectComparisonPair(null);
+
+    expect(useGameStore.getState().selectedComparisonId).toBeNull();
+    expect(useGameStore.getState().comparisonResultsA).toEqual([]);
+    expect(useGameStore.getState().comparisonResultsB).toEqual([]);
   });
 });

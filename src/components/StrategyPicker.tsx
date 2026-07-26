@@ -9,6 +9,8 @@ export interface StrategyPickerProps {
   onSelect: (type: StrategyType) => void;
   isRunning: boolean;
   customRuleCount: number;
+  /** Hides the "Custom Strategy" option — used by Compare mode's second slot. */
+  excludeCustom?: boolean;
 }
 
 const OPTIONS: Array<{ type: StrategyType; title: string; blurb: string; wide?: boolean }> = [
@@ -29,12 +31,15 @@ export function StrategyPicker({
   onSelect,
   isRunning,
   customRuleCount,
+  excludeCustom = false,
 }: StrategyPickerProps) {
+  const options = excludeCustom ? OPTIONS.filter((option) => option.type !== 'custom') : OPTIONS;
+
   return (
     <div>
       <label className="block text-sm font-medium text-text-muted mb-3">Choose Strategy</label>
       <div className="grid grid-cols-2 gap-3">
-        {OPTIONS.map((option) => (
+        {options.map((option) => (
           <button
             key={option.type}
             onClick={() => onSelect(option.type)}

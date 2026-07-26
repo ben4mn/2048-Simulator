@@ -19,6 +19,13 @@ export interface Batch {
   seeds: string[];
   createdAt: string;
   completedAt?: string;
+  /**
+   * Optional pairing id for Compare mode: two batches run back-to-back on
+   * identical seeds share the same comparisonId so ResultsView can find and
+   * render them as a head-to-head pair. Absent on all pre-existing/regular
+   * batches — must remain optional so old stored data keeps working.
+   */
+  comparisonId?: string;
 }
 
 export interface Strategy {

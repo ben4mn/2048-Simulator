@@ -269,3 +269,69 @@ describe('AIStrategyGenerator', () => {
     expect(result.error?.toLowerCase()).not.toContain('unexpected token');
   });
 });
+
+describe('AIStrategyGenerator.serverGenerate', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('POSTs to /api/ai/generate-strategy with credentials included and parses response.content', async () => {
+    const fetchMock = mockFetchOnce({
+      ok: true,
+      jsonBody: { content: JSON.stringify(validRulesPayload()) },
+    });
+
+    const result = await AIStrategyGenerator.serverGenerate('Stack tiles in the corner', 'anthropic');
+
+    expect(result.success).toBe(true);
+    expect(result.rules).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/ai/generate-strategy',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({ description: 'Stack tiles in the corner', provider: 'anthropic', model: undefined }),
+      })
+    );
+  });
+
+  it('surfaces a readable message on 429 rate limiting', async () => {
+    mockFetchOnce({ ok: false, status: 429, jsonThrows: true });
+
+    const result = await AIStrategyGenerator.serverGenerate('desc', 'anthropic');
+
+    expect(result.success).toBe(false);
+    expect(result.error?.toLowerCase()).toContain('rate limit');
+  });
+
+  it('surfaces the server error message for a 400 (e.g. no API key configured)', async () => {
+    mockFetchOnce({ ok: false, status: 400, jsonBody: { error: 'No API key configured for this provider.' } });
+
+    const result = await AIStrategyGenerator.serverGenerate('desc', 'openai');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('No API key configured for this provider.');
+  });
+
+  it('surfaces a readable message on a network failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+
+    const result = await AIStrategyGenerator.serverGenerate('desc', 'anthropic');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/could not reach/i);
+  });
+
+  it('fails gracefully when response.content is missing', async () => {
+    mockFetchOnce({ ok: true, jsonBody: {} });
+
+    const result = await AIStrategyGenerator.serverGenerate('desc', 'anthropic');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/unexpected response shape/i);
+  });
+});

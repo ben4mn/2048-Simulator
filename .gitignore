@@ -10,7 +10,12 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-server
 *.local
+
+# Server runtime data (SQLite lives here in dev / via Docker volume in prod)
+data/
+.env
 
 # Editor directories and files
 .vscode/*

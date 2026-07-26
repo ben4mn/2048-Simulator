@@ -134,4 +134,17 @@ describe('Database (IndexedDB storage layer)', () => {
       await expect(db.saveGames([])).resolves.toBeUndefined();
     }
   );
+
+  it('round-trips the optional comparisonId field on a Batch (Compare mode pairing)', async () => {
+    const batch = makeBatch({ id: 'batch-cmp-a', comparisonId: 'cmp_123' });
+    await db.saveBatch(batch);
+    await expect(db.getBatch('batch-cmp-a')).resolves.toEqual(batch);
+  });
+
+  it('leaves comparisonId undefined for regular (non-comparison) batches', async () => {
+    const batch = makeBatch({ id: 'batch-regular' });
+    await db.saveBatch(batch);
+    const saved = await db.getBatch('batch-regular');
+    expect(saved?.comparisonId).toBeUndefined();
+  });
 });

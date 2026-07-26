@@ -217,3 +217,16 @@ Currently in **Phase 1 (MVP)** - core engine and batch simulation complete.
 Future phases include:
 - Phase 2: Visual strategy builder, heatmap analytics, CSV export
 - Phase 3: ML-based strategy evolution, strategy sharing, leaderboards
+
+## Backend (server/)
+
+Express + SQLite backend (added 2026-07) serving the built SPA and `/api`:
+accounts (bcrypt + JWT cookie), per-user AES-256-GCM-encrypted provider API keys,
+and an AI strategy-generation proxy (admin uses server env key; other users use
+their own stored keys). Contract: docs/api-contract.md. Shared AI prompt:
+shared/aiPrompt.ts.
+
+- Dev: `npm run server:dev` (port 3000) + `npm run dev` (Vite proxies /api)
+- Tests: server/__tests__/ run as part of `npm test`
+- Deploy: `docker compose up -d --build` on the Debian server (port 3048 → NPM
+  → 2048.zyroi.com); `.env` on the server holds secrets (never committed)

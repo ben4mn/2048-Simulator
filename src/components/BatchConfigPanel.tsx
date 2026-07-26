@@ -1,6 +1,7 @@
 /**
  * Batch Configuration Panel
- * UI for configuring and starting batch simulations
+ * UI for configuring and starting batch simulations, including Compare mode
+ * (strategy A vs strategy B head-to-head on identical seeds).
  */
 
 import { useState, type FC } from 'react';
@@ -9,6 +10,7 @@ import { CustomStrategyBuilder } from './CustomStrategyBuilder';
 import { StrategyPicker, type StrategyType } from './StrategyPicker';
 import { SavedStrategiesList } from './SavedStrategiesList';
 import { useGameStore } from '../store/gameStore';
+import type { StrategySelection } from '../store/gameStore';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import type { CustomRule } from '../engine/customRules';
 
@@ -24,12 +26,23 @@ export interface BatchConfig {
 
 interface BatchConfigPanelProps {
   onStartBatch: (config: BatchConfig) => void;
+  onStartComparison?: (configA: StrategySelection, configB: StrategySelection, batchSize: number) => void;
   isRunning: boolean;
+  isRunningComparison?: boolean;
 }
+
+const CORNER_OPTIONS = [
+  { value: 'bottom-left', label: 'Bottom Left' },
+  { value: 'bottom-right', label: 'Bottom Right' },
+  { value: 'top-left', label: 'Top Left' },
+  { value: 'top-right', label: 'Top Right' },
+];
 
 export const BatchConfigPanel: FC<BatchConfigPanelProps> = ({
   onStartBatch,
+  onStartComparison,
   isRunning,
+  isRunningComparison = false,
 }) => {
   const [strategyType, setStrategyType] = useState<StrategyType>('directional_priority');
   const [corner, setCorner] = useState('bottom-left');
@@ -40,9 +53,17 @@ export const BatchConfigPanel: FC<BatchConfigPanelProps> = ({
   const [customRules, setCustomRules] = useState<CustomRule[]>([]);
   const [customStrategyName, setCustomStrategyName] = useState('');
 
+  // Compare mode: strategy A reuses the fields above; strategy B is a
+  // second, simpler slot (built-in strategies only — no custom builder).
+  const [compareMode, setCompareMode] = useState(false);
+  const [strategyTypeB, setStrategyTypeB] = useState<StrategyType>('random');
+  const [cornerB, setCornerB] = useState('bottom-left');
+
   const savedStrategies = useGameStore((s) => s.savedStrategies);
   const saveCustomStrategy = useGameStore((s) => s.saveCustomStrategy);
   const deleteCustomStrategy = useGameStore((s) => s.deleteCustomStrategy);
+
+  const busy = isRunning || isRunningComparison;
 
   const handleCancelCustomBuilder = () => {
     setShowCustomBuilder(false);
@@ -50,7 +71,29 @@ export const BatchConfigPanel: FC<BatchConfigPanelProps> = ({
 
   const slideOverRef = useFocusTrap<HTMLDivElement>(showCustomBuilder, handleCancelCustomBuilder);
 
+  const toggleCompareMode = () => {
+    const next = !compareMode;
+    setCompareMode(next);
+    if (next && strategyType === 'custom') {
+      // Custom strategies aren't supported as either side of a comparison.
+      setStrategyType('directional_priority');
+    }
+  };
+
   const handleStart = () => {
+    if (compareMode && onStartComparison) {
+      const configA: StrategySelection = {
+        strategyType,
+        strategyParams: strategyType === 'corner_anchor' ? { corner } : undefined,
+      };
+      const configB: StrategySelection = {
+        strategyType: strategyTypeB,
+        strategyParams: strategyTypeB === 'corner_anchor' ? { corner: cornerB } : undefined,
+      };
+      onStartComparison(configA, configB, batchSize);
+      return;
+    }
+
     const config: BatchConfig = {
       strategyType,
       strategyParams:
@@ -79,16 +122,64 @@ export const BatchConfigPanel: FC<BatchConfigPanelProps> = ({
 
   return (
     <div className="bg-surface rounded-xl shadow-lg p-6 space-y-6 border border-dark-border">
-      <h2 className="text-2xl font-bold text-text-primary">Batch Simulation</h2>
+      <div className="flex items-start justify-between gap-4">
+        <h2 className="text-2xl font-bold text-text-primary">Batch Simulation</h2>
+        <label className="flex items-center gap-2 shrink-0 cursor-pointer select-none">
+          <span className="text-xs font-medium text-text-muted">Compare mode</span>
+          <input
+            type="checkbox"
+            role="switch"
+            aria-checked={compareMode}
+            checked={compareMode}
+            onChange={toggleCompareMode}
+            disabled={busy}
+            className="h-4 w-8 accent-accent"
+          />
+        </label>
+      </div>
 
-      <StrategyPicker
-        strategyType={strategyType}
-        onSelect={setStrategyType}
-        isRunning={isRunning}
-        customRuleCount={customRules.length}
-      />
+      {compareMode && (
+        <p className="text-xs text-amber-200 bg-amber-500/10 border border-accent/35 rounded-lg p-3">
+          Compare mode runs Strategy A then Strategy B on the same set of seeds, so results are
+          directly comparable. Seed mode is forced to Shared and the custom strategy builder is
+          unavailable for either side.
+        </p>
+      )}
 
-      {strategyType === 'custom' && !showCustomBuilder && (
+      <div>
+        <label className="block text-sm font-medium text-text-muted mb-3">
+          {compareMode ? 'Strategy A' : undefined}
+        </label>
+        <StrategyPicker
+          strategyType={strategyType}
+          onSelect={setStrategyType}
+          isRunning={busy}
+          customRuleCount={customRules.length}
+          excludeCustom={compareMode}
+        />
+      </div>
+
+      {strategyType === 'corner_anchor' && (
+        <div>
+          <label className="block text-sm font-medium text-text-muted mb-2">
+            {compareMode ? 'Strategy A Corner Position' : 'Corner Position'}
+          </label>
+          <select
+            value={corner}
+            onChange={(e) => setCorner(e.target.value)}
+            disabled={busy}
+            className="w-full px-3 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-md focus:ring-2 focus:ring-accent"
+          >
+            {CORNER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {!compareMode && strategyType === 'custom' && !showCustomBuilder && (
         <div className="p-4 bg-amber-500/10 rounded-xl border border-accent/35">
           {customRules.length > 0 ? (
             <div>
@@ -112,7 +203,7 @@ export const BatchConfigPanel: FC<BatchConfigPanelProps> = ({
               </p>
               <button
                 onClick={() => setShowCustomBuilder(true)}
-                disabled={isRunning}
+                disabled={busy}
                 className="px-4 py-2 bg-accent text-gray-950 rounded-lg hover:bg-accent-strong disabled:opacity-50 font-semibold transition-colors"
               >
                 Build Custom Strategy
@@ -147,7 +238,7 @@ export const BatchConfigPanel: FC<BatchConfigPanelProps> = ({
         </>
       )}
 
-      {strategyType === 'custom' && (
+      {!compareMode && strategyType === 'custom' && (
         <SavedStrategiesList
           strategies={savedStrategies}
           onLoad={handleLoadSavedStrategy}
@@ -155,34 +246,48 @@ export const BatchConfigPanel: FC<BatchConfigPanelProps> = ({
         />
       )}
 
-      {strategyType === 'corner_anchor' && (
-        <div>
-          <label className="block text-sm font-medium text-text-muted mb-2">
-            Corner Position
-          </label>
-          <select
-            value={corner}
-            onChange={(e) => setCorner(e.target.value)}
-            disabled={isRunning}
-            className="w-full px-3 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-md focus:ring-2 focus:ring-accent"
-          >
-            <option value="bottom-left">Bottom Left</option>
-            <option value="bottom-right">Bottom Right</option>
-            <option value="top-left">Top Left</option>
-            <option value="top-right">Top Right</option>
-          </select>
+      {compareMode && (
+        <div className="pt-2 border-t border-dark-border space-y-4">
+          <label className="block text-sm font-medium text-text-muted">Strategy B</label>
+          <StrategyPicker
+            strategyType={strategyTypeB}
+            onSelect={setStrategyTypeB}
+            isRunning={busy}
+            customRuleCount={0}
+            excludeCustom
+          />
+
+          {strategyTypeB === 'corner_anchor' && (
+            <div>
+              <label className="block text-sm font-medium text-text-muted mb-2">
+                Strategy B Corner Position
+              </label>
+              <select
+                value={cornerB}
+                onChange={(e) => setCornerB(e.target.value)}
+                disabled={busy}
+                className="w-full px-3 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-md focus:ring-2 focus:ring-accent"
+              >
+                {CORNER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       )}
 
       <div>
         <label className="block text-sm font-medium text-text-muted mb-2">
-          Number of Games
+          Number of Games{compareMode ? ' (per strategy)' : ''}
         </label>
         <input
           type="number"
           value={batchSize}
           onChange={(e) => setBatchSize(Math.max(1, Math.min(10000, Number(e.target.value))))}
-          disabled={isRunning}
+          disabled={busy}
           min={1}
           max={10000}
           className="w-full px-3 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-md focus:ring-2 focus:ring-accent"
@@ -190,66 +295,75 @@ export const BatchConfigPanel: FC<BatchConfigPanelProps> = ({
         <p className="text-xs text-text-muted mt-1">Min: 1, Max: 10,000</p>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-text-muted mb-2">
-          Seed Mode
-        </label>
-        <div className="space-y-2">
-          <label className="flex items-start">
-            <input
-              type="radio"
-              name="seedMode"
-              value="random"
-              checked={seedMode === 'random'}
-              onChange={() => setSeedMode('random')}
-              disabled={isRunning}
-              className="mt-1 mr-2 accent-accent"
-            />
-            <div>
-              <div className="font-medium text-text-primary">Random</div>
-              <div className="text-xs text-text-muted">
-                Each game gets a unique random seed
-              </div>
-            </div>
-          </label>
-          <label className="flex items-start">
-            <input
-              type="radio"
-              name="seedMode"
-              value="fixed"
-              checked={seedMode === 'fixed'}
-              onChange={() => setSeedMode('fixed')}
-              disabled={isRunning}
-              className="mt-1 mr-2 accent-accent"
-            />
-            <div>
-              <div className="font-medium text-text-primary">Fixed</div>
-              <div className="text-xs text-text-muted">
-                All games use the same seed (test consistency)
-              </div>
-            </div>
-          </label>
-          <label className="flex items-start">
-            <input
-              type="radio"
-              name="seedMode"
-              value="shared"
-              checked={seedMode === 'shared'}
-              onChange={() => setSeedMode('shared')}
-              disabled={isRunning}
-              className="mt-1 mr-2 accent-accent"
-            />
-            <div>
-              <div className="font-medium text-text-primary">Shared</div>
-              <div className="text-xs text-text-muted">
-                Generate seeds for head-to-head comparison
-              </div>
-            </div>
-          </label>
+      {compareMode ? (
+        <div className="rounded-lg border border-dark-border bg-surface-raised px-3 py-2">
+          <div className="font-medium text-text-primary text-sm">Seed Mode: Shared</div>
+          <div className="text-xs text-text-muted">
+            Required for head-to-head comparison — both strategies play the exact same seeds.
+          </div>
         </div>
-      </div>
+      ) : (
+        <div>
+          <label className="block text-sm font-medium text-text-muted mb-2">
+            Seed Mode
+          </label>
+          <div className="space-y-2">
+            <label className="flex items-start">
+              <input
+                type="radio"
+                name="seedMode"
+                value="random"
+                checked={seedMode === 'random'}
+                onChange={() => setSeedMode('random')}
+                disabled={busy}
+                className="mt-1 mr-2 accent-accent"
+              />
+              <div>
+                <div className="font-medium text-text-primary">Random</div>
+                <div className="text-xs text-text-muted">
+                  Each game gets a unique random seed
+                </div>
+              </div>
+            </label>
+            <label className="flex items-start">
+              <input
+                type="radio"
+                name="seedMode"
+                value="fixed"
+                checked={seedMode === 'fixed'}
+                onChange={() => setSeedMode('fixed')}
+                disabled={busy}
+                className="mt-1 mr-2 accent-accent"
+              />
+              <div>
+                <div className="font-medium text-text-primary">Fixed</div>
+                <div className="text-xs text-text-muted">
+                  All games use the same seed (test consistency)
+                </div>
+              </div>
+            </label>
+            <label className="flex items-start">
+              <input
+                type="radio"
+                name="seedMode"
+                value="shared"
+                checked={seedMode === 'shared'}
+                onChange={() => setSeedMode('shared')}
+                disabled={busy}
+                className="mt-1 mr-2 accent-accent"
+              />
+              <div>
+                <div className="font-medium text-text-primary">Shared</div>
+                <div className="text-xs text-text-muted">
+                  Generate seeds for head-to-head comparison
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+      )}
 
-      {seedMode === 'fixed' && (
+      {!compareMode && seedMode === 'fixed' && (
         <div>
           <label className="block text-sm font-medium text-text-muted mb-2">
             Seed
@@ -259,14 +373,14 @@ export const BatchConfigPanel: FC<BatchConfigPanelProps> = ({
               type="text"
               value={fixedSeed}
               onChange={(e) => setFixedSeed(e.target.value.toUpperCase())}
-              disabled={isRunning}
+              disabled={busy}
               maxLength={8}
               className="flex-1 px-3 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-md font-mono focus:ring-2 focus:ring-accent"
               placeholder="A7X9K2M1"
             />
             <button
               onClick={() => setFixedSeed(generateSeed())}
-              disabled={isRunning}
+              disabled={busy}
               className="px-3 py-2 bg-surface-raised hover:bg-surface-elevated text-text-primary rounded-md text-sm disabled:opacity-50 border border-dark-border"
             >
               Random
@@ -277,10 +391,14 @@ export const BatchConfigPanel: FC<BatchConfigPanelProps> = ({
 
       <button
         onClick={handleStart}
-        disabled={isRunning}
+        disabled={busy}
         className="w-full px-6 py-3 bg-accent hover:bg-accent-strong text-gray-950 font-bold rounded-lg shadow-lg shadow-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isRunning ? 'Running...' : 'Start Batch Simulation'}
+        {busy
+          ? 'Running...'
+          : compareMode
+            ? 'Run Comparison'
+            : 'Start Batch Simulation'}
       </button>
     </div>
   );

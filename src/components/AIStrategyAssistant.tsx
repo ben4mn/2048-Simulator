@@ -1,10 +1,19 @@
 /**
  * AI Strategy Assistant - Natural language strategy generation
+ *
+ * Two modes:
+ * - Server mode: signed-in users with a stored key for the selected provider
+ *   (or the admin, whose site key covers Anthropic) call the backend proxy —
+ *   no key ever touches this browser.
+ * - Direct-browser mode (legacy, still supported for logged-out users):
+ *   the existing sessionStorage-key flow, sent straight to the provider.
  */
 
 import { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { CustomRule } from '../engine/customRules';
 import { AIStrategyGenerator, type AIProvider } from '../services/aiStrategyGenerator';
+import { useAuthStore } from '../store/authStore';
 
 export interface AIStrategyAssistantProps {
   onGenerate: (rules: CustomRule[], strategyName: string) => void;
@@ -17,6 +26,13 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+
+  const { authStatus, user } = useAuthStore(
+    useShallow((s) => ({ authStatus: s.status, user: s.user }))
+  );
+
+  const usesServerMode =
+    authStatus === 'authed' && !!user && (user.isAdmin || user.keys[provider]);
 
   const loadApiKey = () => {
     const stored = sessionStorage.getItem(`ai_${provider}_key`);
@@ -57,21 +73,33 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
       return;
     }
 
-    let currentApiKey = apiKey;
-    if (!currentApiKey) {
-      const hasStoredKey = loadApiKey();
-      if (!hasStoredKey) {
-        setShowApiKeyInput(true);
-        setError('Please enter your API key');
-        return;
-      }
-      currentApiKey = sessionStorage.getItem(`ai_${provider}_key`) || '';
-    }
-
     setIsGenerating(true);
     setError(null);
 
     try {
+      if (usesServerMode) {
+        const response = await AIStrategyGenerator.serverGenerate(description.trim(), provider);
+        if (response.success && response.rules) {
+          onGenerate(response.rules, response.strategyName || 'AI Generated Strategy');
+          setDescription('');
+          setError(null);
+        } else {
+          setError(response.error || 'Failed to generate strategy');
+        }
+        return;
+      }
+
+      let currentApiKey = apiKey;
+      if (!currentApiKey) {
+        const hasStoredKey = loadApiKey();
+        if (!hasStoredKey) {
+          setShowApiKeyInput(true);
+          setError('Please enter your API key');
+          return;
+        }
+        currentApiKey = sessionStorage.getItem(`ai_${provider}_key`) || '';
+      }
+
       const response = await AIStrategyGenerator.generateStrategy({
         description: description.trim(),
         config: {
@@ -145,48 +173,64 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
         </div>
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-text-muted">API Key</label>
-          <button
-            onClick={() => setShowApiKeyInput(!showApiKeyInput)}
-            className="text-sm text-accent hover:text-amber-300 font-medium"
-          >
-            {showApiKeyInput ? 'Hide' : sessionStorage.getItem(`ai_${provider}_key`) ? 'Change' : 'Configure'}
-          </button>
+      {usesServerMode ? (
+        <div className="p-4 bg-emerald-500/10 border border-success/35 rounded-lg">
+          <p className="text-sm text-emerald-200">
+            Using your account{user?.isAdmin && provider === 'anthropic' ? ' (site key)' : ''} — no
+            API key needed here. Requests go through the server for the {provider === 'openai' ? 'OpenAI' : 'Anthropic'}{' '}
+            provider.
+          </p>
         </div>
-
-        {showApiKeyInput && (
-          <div className="space-y-2">
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={`Enter your ${provider === 'openai' ? 'OpenAI' : 'Anthropic'} API key`}
-              className="w-full px-4 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-lg focus:ring-2 focus:ring-accent focus:border-accent"
-            />
+      ) : (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-text-muted">API Key</label>
             <button
-              onClick={saveApiKey}
-              className="w-full px-4 py-2 bg-surface-elevated text-text-primary rounded-lg border border-dark-border hover:bg-surface"
+              onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+              className="text-sm text-accent hover:text-amber-300 font-medium"
             >
-              Save API Key (session only)
+              {showApiKeyInput ? 'Hide' : sessionStorage.getItem(`ai_${provider}_key`) ? 'Change' : 'Configure'}
             </button>
-            <p className="text-xs text-text-muted">
-              Your API key is stored in session storage and will be cleared when you close the browser.
-            </p>
-            <p className="text-xs text-amber-200 bg-amber-500/10 border border-accent/35 rounded-lg p-2">
-              Warning: your API key is sent directly from this browser to the AI provider and kept
-              in sessionStorage for this tab. Anyone with access to this browser session (including
-              malicious browser extensions) could read it. Use a low-limit key you can revoke, and
-              avoid entering keys on shared computers.
-            </p>
           </div>
-        )}
 
-        {!showApiKeyInput && sessionStorage.getItem(`ai_${provider}_key`) && (
-          <p className="text-sm text-success">✓ API key configured</p>
-        )}
-      </div>
+          {showApiKeyInput && (
+            <div className="space-y-2">
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={`Enter your ${provider === 'openai' ? 'OpenAI' : 'Anthropic'} API key`}
+                className="w-full px-4 py-2 border border-dark-border bg-surface-raised text-text-primary rounded-lg focus:ring-2 focus:ring-accent focus:border-accent"
+              />
+              <button
+                onClick={saveApiKey}
+                className="w-full px-4 py-2 bg-surface-elevated text-text-primary rounded-lg border border-dark-border hover:bg-surface"
+              >
+                Save API Key (session only)
+              </button>
+              <p className="text-xs text-text-muted">
+                Your API key is stored in session storage and will be cleared when you close the browser.
+              </p>
+              <p className="text-xs text-amber-200 bg-amber-500/10 border border-accent/35 rounded-lg p-2">
+                Warning: your API key is sent directly from this browser to the AI provider and kept
+                in sessionStorage for this tab. Anyone with access to this browser session (including
+                malicious browser extensions) could read it. Use a low-limit key you can revoke, and
+                avoid entering keys on shared computers.
+              </p>
+            </div>
+          )}
+
+          {!showApiKeyInput && sessionStorage.getItem(`ai_${provider}_key`) && (
+            <p className="text-sm text-success">✓ API key configured</p>
+          )}
+
+          <p className="text-xs text-text-muted mt-2">
+            Prefer not to paste a key here? Sign in from the Account card in the simulation section
+            and add your key there once — it stays on the server and this assistant will use it
+            automatically.
+          </p>
+        </div>
+      )}
 
       <div>
         <label htmlFor="ai-description" className="block text-sm font-medium text-text-muted mb-2">

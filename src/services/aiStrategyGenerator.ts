@@ -3,6 +3,7 @@
  * Converts natural language descriptions into 2048 strategy rules
  */
 
+import { SYSTEM_PROMPT } from '../../shared/aiPrompt';
 import type {
   ConditionParams,
   ConditionType,
@@ -63,67 +64,7 @@ const WEIGHT_KEYS: readonly (keyof EvaluationWeights)[] = [
   'smoothness',
 ];
 
-const SYSTEM_PROMPT = `You are a 2048 game strategy designer. Convert user descriptions into JSON rule configurations.
 
-Available rule types:
-
-1. PATTERN - Repeats a fixed sequence of moves
-   Example: { "type": "pattern", "sequence": ["left", "down", "right", "down"] }
-
-2. CONDITIONAL - If-then rules based on board state
-   Example: {
-     "type": "conditional",
-     "condition": "max_tile_in_corner",
-     "conditionParams": { "corner": "bottom-left" },
-     "action": ["left", "down"],
-     "priority": 10
-   }
-
-   Available conditions:
-   - "max_tile_in_corner" (params: corner)
-   - "max_tile_on_edge"
-   - "empty_cells_count" (params: threshold)
-   - "merge_available"
-   - "monotonic_rows" (params: threshold)
-   - "monotonic_cols" (params: threshold)
-
-3. LOOKAHEAD - Evaluates moves N steps ahead
-   Example: {
-     "type": "lookahead",
-     "depth": 2,
-     "evaluationWeights": {
-       "emptyTiles": 2.7,
-       "maxTileValue": 1.0,
-       "maxTileCorner": 4.0,
-       "mergeCount": 1.5,
-       "monotonicity": 3.0,
-       "smoothness": 0.5
-     }
-   }
-
-4. WEIGHTED - Scores moves by weighted criteria
-   Example: {
-     "type": "weighted",
-     "weights": {
-       "emptyTiles": 3.0,
-       "maxTileValue": 1.0,
-       "maxTileCorner": 5.0,
-       "mergeCount": 2.0,
-       "monotonicity": 2.5,
-       "smoothness": 0.5
-     }
-   }
-
-Directions: "up", "down", "left", "right"
-Corners: "top-left", "top-right", "bottom-left", "bottom-right"
-
-Respond with JSON in this format:
-{
-  "strategyName": "Descriptive strategy name",
-  "rules": [rule1, rule2, ...]
-}
-
-Create strategies that match the user's description. Combine multiple rule types if needed.`;
 
 export class AIStrategyGenerator {
   /**
@@ -197,6 +138,65 @@ export class AIStrategyGenerator {
       return 'This looks like an OpenAI API key. Anthropic keys start with "sk-ant-". Please check the selected provider or the key.';
     }
     return null;
+  }
+
+  /**
+   * Server mode: POST the description to the backend, which builds the
+   * request itself (system prompt, key resolution for the signed-in user or
+   * the admin's site key) and returns { content: string } — the raw model
+   * text. Runs the SAME extraction/validation pipeline as the direct-browser
+   * mode on that content, so downstream rule handling is identical either way.
+   */
+  static async serverGenerate(
+    description: string,
+    provider?: AIProvider,
+    model?: string
+  ): Promise<GenerateStrategyResponse> {
+    try {
+      const response = await this.safeFetch('AI strategy', '/api/ai/generate-strategy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ description, provider, model }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await this.extractServerErrorMessage(response));
+      }
+
+      const data = (await response.json()) as { content?: string };
+      if (typeof data.content !== 'string') {
+        throw new Error('AI strategy server returned an unexpected response shape');
+      }
+
+      return this.parseAIResponse(data.content);
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Readable error extraction for the server-proxied AI endpoint, including
+   * a dedicated message for 429 (per-user rate limiting).
+   */
+  private static async extractServerErrorMessage(response: Response): Promise<string> {
+    if (response.status === 429) {
+      return 'Rate limit reached for AI strategy generation (10/hour). Please wait before trying again.';
+    }
+
+    try {
+      const body: unknown = await response.json();
+      if (body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string') {
+        return (body as { error: string }).error;
+      }
+    } catch {
+      // Body wasn't JSON — fall through to the generic message below.
+    }
+
+    return `AI strategy request failed (${response.status}${response.statusText ? ` ${response.statusText}` : ''})`;
   }
 
   /**
