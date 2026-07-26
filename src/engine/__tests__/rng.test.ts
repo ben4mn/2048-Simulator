@@ -126,3 +126,47 @@ describe('generateSeed', () => {
     }
   });
 });
+
+describe('SeededRNG internal state export/restore', () => {
+  it('a restored RNG continues the exact same stream', () => {
+    const rng = new SeededRNG('STATE-SEED');
+    // Advance the stream a bit
+    for (let i = 0; i < 17; i++) rng.next();
+
+    const snapshot = rng.getInternalState();
+    const expected = [rng.next(), rng.next(), rng.next(), rng.next(), rng.next()];
+
+    const restored = new SeededRNG('STATE-SEED');
+    restored.setInternalState(snapshot);
+    const actual = [restored.next(), restored.next(), restored.next(), restored.next(), restored.next()];
+
+    expect(actual).toEqual(expected);
+  });
+
+  it('restoring state onto an RNG with a different seed still reproduces the stream', () => {
+    const rng = new SeededRNG('AAA11111');
+    rng.next();
+    rng.next();
+    const snapshot = rng.getInternalState();
+    const expected = rng.next();
+
+    const other = new SeededRNG('ZZZ99999');
+    other.setInternalState(snapshot);
+    expect(other.next()).toBe(expected);
+  });
+
+  it('advancing a restored copy does not affect the original', () => {
+    const rng = new SeededRNG('INDEP-01');
+    rng.next();
+    const snapshot = rng.getInternalState();
+
+    const copy = new SeededRNG('INDEP-01');
+    copy.setInternalState(snapshot);
+    for (let i = 0; i < 10; i++) copy.next();
+
+    // Original still at snapshot position
+    const fresh = new SeededRNG('INDEP-01');
+    fresh.setInternalState(snapshot);
+    expect(rng.next()).toBe(fresh.next());
+  });
+});

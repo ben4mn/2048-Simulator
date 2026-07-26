@@ -224,3 +224,112 @@ describe('GameEngine initial state', () => {
     expect(state.maxTile).toBe(4);
   });
 });
+
+describe('GameEngine.clone()', () => {
+  const applyMoves = (engine: GameEngine, dirs: Direction[]) => {
+    for (const d of dirs) engine.move(d);
+  };
+
+  /** Drive both engines with the same greedy policy and compare every step. */
+  const playIdentically = (a: GameEngine, b: GameEngine, steps: number) => {
+    const priority: Direction[] = ['left', 'down', 'right', 'up'];
+    for (let i = 0; i < steps; i++) {
+      const dir = priority.find(d => a.isValidMove(d));
+      if (!dir) break;
+      const movedA = a.move(dir);
+      const movedB = b.move(dir);
+      expect(movedB).toBe(movedA);
+      expect(b.getState().board).toEqual(a.getState().board);
+      expect(b.getState().score).toBe(a.getState().score);
+    }
+  };
+
+  it('clone starts with identical state (board, score, moves, flags, seed)', () => {
+    const engine = new GameEngine('CLONE-01');
+    applyMoves(engine, ['left', 'down', 'left', 'right', 'up', 'down']);
+
+    const clone = engine.clone();
+    expect(clone.getSeed()).toBe(engine.getSeed());
+    expect(clone.getState()).toEqual(engine.getState());
+  });
+
+  it('clone preserves the RNG stream position: same subsequent moves produce identical spawns', () => {
+    const engine = new GameEngine('CLONE-02');
+    applyMoves(engine, ['left', 'down', 'right', 'down', 'left']);
+
+    const clone = engine.clone();
+    playIdentically(engine, clone, 50);
+  });
+
+  it('mutating the clone never affects the original', () => {
+    const engine = new GameEngine('CLONE-03');
+    applyMoves(engine, ['left', 'down']);
+    const before = engine.getState();
+
+    const clone = engine.clone();
+    applyMoves(clone, ['left', 'down', 'right', 'up', 'left', 'down']);
+
+    const after = engine.getState();
+    expect(after.board).toEqual(before.board);
+    expect(after.score).toBe(before.score);
+    expect(after.moves).toEqual(before.moves);
+  });
+
+  it('mutating the original after cloning never affects the clone', () => {
+    const engine = new GameEngine('CLONE-04');
+    applyMoves(engine, ['left', 'down', 'right']);
+    const clone = engine.clone();
+    const cloneBefore = clone.getState();
+
+    applyMoves(engine, ['left', 'down', 'right', 'up']);
+    expect(clone.getState()).toEqual(cloneBefore);
+  });
+
+  it('clone of a clone behaves identically to the original stream', () => {
+    const engine = new GameEngine('CLONE-05');
+    applyMoves(engine, ['left', 'down', 'left']);
+    const clone2 = engine.clone().clone();
+    playIdentically(engine, clone2, 30);
+  });
+
+  it('clone matches the equivalent replay-from-seed engine exactly', () => {
+    const engine = new GameEngine('CLONE-06');
+    applyMoves(engine, ['left', 'down', 'right', 'down']);
+
+    // The old (slow) way: fresh engine + full move-history replay.
+    const replayed = new GameEngine('CLONE-06');
+    const map: Record<string, Direction> = { U: 'up', D: 'down', L: 'left', R: 'right' };
+    for (const m of engine.getState().moves) replayed.move(map[m]);
+
+    const clone = engine.clone();
+    expect(clone.getState()).toEqual(replayed.getState());
+    playIdentically(replayed, clone, 30);
+  });
+});
+
+describe('GameEngine cheap accessors', () => {
+  it('agree with getState() fields after a series of moves', () => {
+    const engine = new GameEngine('ACCESS-1');
+    const priority: Direction[] = ['left', 'down', 'right', 'up'];
+    for (let i = 0; i < 40; i++) {
+      const dir = priority.find(d => engine.isValidMove(d));
+      if (!dir) break;
+      engine.move(dir);
+
+      const state = engine.getState();
+      expect(engine.isGameOver()).toBe(state.gameOver);
+      expect(engine.getScore()).toBe(state.score);
+      expect(engine.getMaxTileValue()).toBe(state.maxTile);
+      expect(engine.getBoardView()).toEqual(state.board);
+    }
+  });
+
+  it('getBoardView reflects live state without copying', () => {
+    const engine = new GameEngine('ACCESS-2');
+    const view = engine.getBoardView();
+    expect(view).toEqual(engine.getState().board);
+
+    // Same reference returned on subsequent calls until the board is replaced.
+    expect(engine.getBoardView()).toBe(view);
+  });
+});

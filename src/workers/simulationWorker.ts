@@ -24,6 +24,11 @@ export interface SimulationProgress {
   jobId: string;
   completed: number;
   total: number;
+  /**
+   * Only the results produced since the PREVIOUS progress message (a delta),
+   * not the full accumulated set. The main thread (gameStore) accumulates
+   * deltas; this keeps serialization O(batch) overall instead of O(batch^2).
+   */
   results: GameResult[];
 }
 
@@ -41,7 +46,9 @@ function runSimulation(job: SimulationJob) {
       ? CustomStrategyFactory.createFromRules(job.customRules, job.customStrategyName)
       : createStrategy(job.strategyType, job.strategyParams as StrategyFactoryParams | undefined);
 
-  const results: GameResult[] = [];
+  // Buffer of results not yet posted to the main thread (delta since the
+  // last progress message).
+  let pendingResults: GameResult[] = [];
   const startTime = Date.now();
 
   for (let i = 0; i < job.seeds.length; i++) {
@@ -55,7 +62,7 @@ function runSimulation(job: SimulationJob) {
     let moveCount = 0;
     const maxMoves = 10000;
 
-    while (!engine.getState().gameOver && moveCount < maxMoves) {
+    while (!engine.isGameOver() && moveCount < maxMoves) {
       const move = strategy.selectMove(engine);
       if (!move) break;
       // A rejected move leaves the board unchanged; break instead of spinning.
@@ -81,16 +88,19 @@ function runSimulation(job: SimulationJob) {
       durationMs: gameEndTime - gameStartTime,
     };
 
-    results.push(result);
+    pendingResults.push(result);
 
-    // Send progress update every 10 games or on completion
+    // Send progress update every 10 games or on completion. Each message
+    // carries only the delta since the previous message (see
+    // SimulationProgress.results); the store accumulates.
     if ((i + 1) % 10 === 0 || i === job.seeds.length - 1) {
       const progress: SimulationProgress = {
         jobId: job.jobId,
         completed: i + 1,
         total: job.seeds.length,
-        results: results.slice(), // Send copy of all results so far
+        results: pendingResults,
       };
+      pendingResults = [];
       self.postMessage(progress);
     }
   }

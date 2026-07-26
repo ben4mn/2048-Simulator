@@ -75,12 +75,12 @@ export class CornerAnchorStrategy implements Strategy {
   }
 
   selectMove(engine: GameEngine): Direction | null {
-    const state = engine.getState();
-    const maxTile = this.getMaxTile(state.board);
+    const board = engine.getBoardView();
+    const maxTile = engine.getMaxTileValue();
     const cornerPos = this.getCornerPosition();
 
     // Check if max tile is in the corner
-    const maxInCorner = state.board[cornerPos.row][cornerPos.col] === maxTile;
+    const maxInCorner = board[cornerPos.row][cornerPos.col] === maxTile;
 
     // If max tile is in corner, prefer moves that keep it there
     if (maxInCorner) {
@@ -100,16 +100,6 @@ export class CornerAnchorStrategy implements Strategy {
     }
 
     return null;
-  }
-
-  private getMaxTile(board: Board): number {
-    let max = 0;
-    for (const row of board) {
-      for (const tile of row) {
-        if (tile > max) max = tile;
-      }
-    }
-    return max;
   }
 
   private getCornerPosition(): { row: number; col: number } {
@@ -153,10 +143,11 @@ export class MergeMaxStrategy implements Strategy {
     let bestDirection: Direction | null = null;
     let maxMerges = -1;
 
+    const board = engine.getBoardView() as Board;
     for (const direction of directions) {
       if (!engine.isValidMove(direction)) continue;
 
-      const merges = this.countPotentialMerges(engine.getState().board, direction);
+      const merges = this.countPotentialMerges(board, direction);
       if (merges > maxMerges) {
         maxMerges = merges;
         bestDirection = direction;
@@ -284,7 +275,7 @@ export class ConditionalStrategy implements Strategy {
   }
 
   selectMove(engine: GameEngine): Direction | null {
-    const board = engine.getState().board;
+    const board = engine.getBoardView() as Board;
 
     // Evaluate rules in priority order
     for (const rule of this.rules) {
@@ -340,16 +331,9 @@ export class LookAheadStrategy implements Strategy {
   }
 
   private evaluateMove(engine: GameEngine, direction: Direction, depth: number): number {
-    // Create a temporary engine to simulate
-    const tempEngine = new GameEngine(engine.getSeed());
-    const currentState = engine.getState();
-
-    // Replay moves to get to current state
-    // NOTE: This is simplified - in production you'd want to clone state more efficiently
-    for (const move of currentState.moves) {
-      const moveMap: Record<string, Direction> = { U: 'up', D: 'down', L: 'left', R: 'right' };
-      tempEngine.move(moveMap[move]);
-    }
+    // Clone the engine (board + score + exact RNG stream position) instead of
+    // replaying the full move history on a fresh engine — O(1) vs O(moves).
+    const tempEngine = engine.clone();
 
     // Make the test move
     if (!tempEngine.move(direction)) {
@@ -358,7 +342,7 @@ export class LookAheadStrategy implements Strategy {
 
     // If we've reached target depth, evaluate
     if (depth === 1) {
-      return this.evaluateBoard(tempEngine.getState().board);
+      return this.evaluateBoard(tempEngine.getBoardView() as Board);
     }
 
     // Otherwise, recursively evaluate next moves. The player chooses the
@@ -374,7 +358,7 @@ export class LookAheadStrategy implements Strategy {
       }
     }
 
-    return bestScore !== -Infinity ? bestScore : this.evaluateBoard(tempEngine.getState().board);
+    return bestScore !== -Infinity ? bestScore : this.evaluateBoard(tempEngine.getBoardView() as Board);
   }
 }
 
@@ -400,19 +384,13 @@ export class WeightedStrategy implements Strategy {
     for (const direction of directions) {
       if (!engine.isValidMove(direction)) continue;
 
-      // Evaluate the board after this move
-      const tempEngine = new GameEngine(engine.getSeed());
-      const currentState = engine.getState();
-
-      // Replay to current state
-      for (const move of currentState.moves) {
-        const moveMap: Record<string, Direction> = { U: 'up', D: 'down', L: 'left', R: 'right' };
-        tempEngine.move(moveMap[move]);
-      }
+      // Evaluate the board after this move by cloning (board + RNG position)
+      // instead of replaying the entire move history on a fresh engine.
+      const tempEngine = engine.clone();
 
       // Make the test move
       if (tempEngine.move(direction)) {
-        const score = this.evaluateBoard(tempEngine.getState().board);
+        const score = this.evaluateBoard(tempEngine.getBoardView() as Board);
         if (score > bestScore) {
           bestScore = score;
           bestDirection = direction;
@@ -524,7 +502,7 @@ export function playGameWithStrategy(
   // Reset stateful strategies so a reused instance plays like a fresh one.
   strategy.reset?.(seed);
 
-  while (!engine.getState().gameOver && moveCount < maxMoves) {
+  while (!engine.isGameOver() && moveCount < maxMoves) {
     const move = strategy.selectMove(engine);
     if (!move) break;
 

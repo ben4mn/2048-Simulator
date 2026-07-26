@@ -3,9 +3,9 @@
  * Allows users to replay a game move-by-move with controls
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import GameBoard from './GameBoard';
-import { GameEngine } from '../engine/gameEngine';
+import { ReplaySession } from '../engine/replaySession';
 import type { DirectionShort, GameState } from '../engine/types';
 
 interface GameReplayProps {
@@ -20,31 +20,25 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(500);
 
-  const moveArray = moves.split('') as DirectionShort[];
+  const moveArray = useMemo(() => moves.split('') as DirectionShort[], [moves]);
   const totalMoves = moveArray.length;
 
-  useEffect(() => {
-    const engine = new GameEngine(seed);
-    setGameState(engine.getState());
-  }, [seed]);
-
-  const updateGameState = useCallback(
-    (moveIndex: number) => {
-      const engine = new GameEngine(seed);
-
-      for (let i = 0; i < moveIndex && i < totalMoves; i++) {
-        const move = convertShortToDirection(moveArray[i]);
-        if (move) engine.move(move);
-      }
-
-      setGameState(engine.getState());
-    },
-    [seed, moveArray, totalMoves]
-  );
+  // Incremental replay: keep a live session so advancing by one move applies
+  // just that move instead of rebuilding and replaying from move 0 each tick.
+  const sessionRef = useRef<ReplaySession | null>(null);
 
   useEffect(() => {
-    updateGameState(currentMove);
-  }, [currentMove, updateGameState]);
+    sessionRef.current = new ReplaySession(seed, moveArray);
+    setCurrentMove(0);
+    setGameState(sessionRef.current.seek(0));
+  }, [seed, moveArray]);
+
+  useEffect(() => {
+    const session = sessionRef.current;
+    if (session) {
+      setGameState(session.seek(currentMove));
+    }
+  }, [currentMove, seed, moveArray]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -197,15 +191,5 @@ export const GameReplay: React.FC<GameReplayProps> = ({ seed, moves, onClose }) 
     </div>
   );
 };
-
-function convertShortToDirection(short: DirectionShort): 'up' | 'down' | 'left' | 'right' | null {
-  const map: Record<DirectionShort, 'up' | 'down' | 'left' | 'right'> = {
-    U: 'up',
-    D: 'down',
-    L: 'left',
-    R: 'right',
-  };
-  return map[short] || null;
-}
 
 export default GameReplay;

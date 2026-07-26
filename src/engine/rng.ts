@@ -60,6 +60,23 @@ export class SeededRNG {
   }
 
   /**
+   * Export the raw internal state (mulberry32 is fully described by a single
+   * 32-bit integer). Pair with setInternalState() to snapshot/restore the
+   * exact position in the random stream.
+   */
+  getInternalState(): number {
+    return this.state;
+  }
+
+  /**
+   * Restore a state previously captured with getInternalState().
+   * The RNG will continue the stream exactly where the snapshot was taken.
+   */
+  setInternalState(state: number): void {
+    this.state = state;
+  }
+
+  /**
    * Reset to original seed
    */
   reset(): void {

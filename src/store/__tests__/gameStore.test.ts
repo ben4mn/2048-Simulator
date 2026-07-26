@@ -167,3 +167,99 @@ describe('gameStore batch worker lifecycle', () => {
     expect(useGameStore.getState().storageError).toMatch(/write failed|Failed to save/);
   });
 });
+
+describe('gameStore delta progress messages', () => {
+  beforeEach(async () => {
+    (globalThis as any).indexedDB = new IDBFactory();
+    await db.init();
+
+    FakeWorker.instances = [];
+    vi.stubGlobal('Worker', FakeWorker as unknown as typeof Worker);
+
+    useGameStore.setState({
+      worker: null,
+      isRunningBatch: false,
+      batchProgress: 0,
+      batchTotal: 0,
+      currentBatchId: null,
+      batchResults: [],
+      storageError: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const makeResult = (id: string, batchId: string | null) => ({
+    id,
+    batchId,
+    strategyId: 'strategy-1',
+    seed: `SEED-${id}`,
+    moves: 'L',
+    finalScore: 10,
+    maxTile: 4,
+    moveCount: 1,
+    result: 'loss' as const,
+    timestamp: Date.now(),
+    durationMs: 10,
+  });
+
+  it('accumulates per-message deltas and saves each game exactly once', async () => {
+    const saveGamesSpy = vi.spyOn(db, 'saveGames');
+
+    useGameStore.getState().startBatchSimulation({
+      strategyType: 'random',
+      batchSize: 4,
+      seedMode: 'random',
+    });
+    await flush();
+
+    const worker = useGameStore.getState().worker as unknown as FakeWorker;
+    const batchId = useGameStore.getState().currentBatchId;
+
+    // Worker now posts only the results since the previous progress message.
+    worker.onmessage?.({
+      data: {
+        jobId: 'job_1',
+        completed: 2,
+        total: 4,
+        results: [makeResult('g1', batchId), makeResult('g2', batchId)],
+      },
+    } as MessageEvent);
+    await flush();
+
+    expect(useGameStore.getState().batchProgress).toBe(2);
+
+    worker.onmessage?.({
+      data: {
+        jobId: 'job_1',
+        completed: 4,
+        total: 4,
+        results: [makeResult('g3', batchId), makeResult('g4', batchId)],
+      },
+    } as MessageEvent);
+
+    // The completion path awaits several sequential IndexedDB operations;
+    // wait until the store reflects completion instead of counting flushes.
+    await vi.waitFor(() => {
+      expect(useGameStore.getState().isRunningBatch).toBe(false);
+      expect(useGameStore.getState().viewMode).toBe('results');
+    });
+
+    // Every game id saved exactly once across all saveGames calls.
+    const savedIds = saveGamesSpy.mock.calls.flatMap(
+      (call) => (call[0] as Array<{ id: string }>).map((g) => g.id)
+    );
+    expect([...savedIds].sort()).toEqual(['g1', 'g2', 'g3', 'g4']);
+
+    // The store accumulated the deltas into the full result set.
+    const state = useGameStore.getState();
+    expect(state.batchResults.map((r) => r.id).sort()).toEqual(['g1', 'g2', 'g3', 'g4']);
+
+    // And IndexedDB holds all four games for the batch.
+    const persisted = await db.getGamesByBatch(batchId as string);
+    expect(persisted.map((g) => g.id).sort()).toEqual(['g1', 'g2', 'g3', 'g4']);
+  });
+});

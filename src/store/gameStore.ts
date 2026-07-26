@@ -198,8 +198,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       { type: 'module' }
     );
 
+    // Progress messages carry only the results since the previous message
+    // (deltas); accumulate them here for the final result set.
+    const accumulatedResults: GameResult[] = [];
+
     worker.onmessage = (e: MessageEvent<SimulationProgress>) => {
       const progress = e.data;
+      accumulatedResults.push(...progress.results);
 
       // Update progress
       set({
@@ -207,8 +212,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         batchTotal: progress.total,
       });
 
-      // Save results to DB
-      if (progress.results.length > 0) {
+      const isFinal = progress.completed === progress.total;
+
+      // Save the delta to DB. The final delta is saved in the completion
+      // block below (with error handling that fails the batch), so each game
+      // is written exactly once.
+      if (!isFinal && progress.results.length > 0) {
         void db.saveGames(progress.results).catch((error) => {
           set({
             storageError: `Failed to save game results: ${error instanceof Error ? error.message : String(error)}`,
@@ -217,7 +226,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
 
       // If completed
-      if (progress.completed === progress.total) {
+      if (isFinal) {
         worker.terminate();
         set({ worker: null });
 
@@ -239,7 +248,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
               currentBatchId: null,
               selectedBatchId: batchId,
               selectedGameId: null,
-              batchResults: progress.results.slice(),
+              batchResults: accumulatedResults.slice(),
               viewMode: 'results',
             });
           } catch (error) {
