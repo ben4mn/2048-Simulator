@@ -303,9 +303,8 @@ export function AIStrategyAssistant({ onGenerate }: AIStrategyAssistantProps) {
 
       <div className="p-4 bg-surface-raised rounded-lg border border-dark-border">
         <p className="text-sm text-text-muted">
-          <strong className="text-text-primary">Note:</strong> The AI will analyze your description and create a combination of
-          rules (pattern-based, conditional, look-ahead, or weighted). You can review and edit the
-          generated rules in the Manual Builder tab before saving.
+          <strong className="text-text-primary">Note:</strong> The generated strategy appears below
+          as a plain-English summary with tunable dials — test drive it before saving.
         </p>
       </div>
     </div>

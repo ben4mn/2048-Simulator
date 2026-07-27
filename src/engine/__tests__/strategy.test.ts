@@ -107,11 +107,9 @@ describe('strategy move contract (valid or null-only-when-stuck)', () => {
     expect(n).toBeGreaterThanOrEqual(200);
   });
 
-  it('WeightedStrategy', () => {
-    // Weighted replays the full move history per candidate move (O(n^2)),
-    // so keep games short.
+  it('EvaluationStrategy (depth 1, replaces WeightedStrategy)', () => {
     const n = assertMoveContract(
-      () => createStrategy('weighted', { evaluateBoard: evaluate }),
+      () => createStrategy('evaluation'),
       CHEAP_SEEDS.slice(0, 2),
       40
     );
@@ -358,7 +356,7 @@ describe('createStrategy factory (known bug: silent fallback)', () => {
     expect(createStrategy('pattern').id).toBe('pattern');
     expect(createStrategy('conditional').id).toBe('conditional');
     expect(createStrategy('lookahead').id).toBe('lookahead');
-    expect(createStrategy('weighted').id).toBe('weighted');
+    expect(createStrategy('evaluation').id).toBe('evaluation');
     expect(createStrategy('custom').id).toBe('custom');
   });
 });

@@ -42,24 +42,22 @@ Strategies implement the `Strategy` interface with a single method: `selectMove(
 - `MergeMaxStrategy`: Counts potential merges for each direction, chooses maximum
 - `RandomStrategy`: Baseline for comparison
 
-**Custom Strategy Types** (added for user-defined rules):
-- `PatternStrategy`: Cycles through a fixed sequence of moves
-- `ConditionalStrategy`: Evaluates board conditions and applies rule-based actions
-- `LookAheadStrategy`: Evaluates moves N steps ahead using board scoring heuristics
-- `WeightedStrategy`: Scores each move based on weighted criteria (empty tiles, merges, monotonicity, etc.)
-- `CustomStrategy`: Container that executes multiple sub-strategies in priority order
+**Custom Strategy Runtime** (consolidated 2026-07):
+- `EvaluationStrategy`: THE custom-strategy runtime — weighted board scoring with look-ahead depth 1-5, plus up to 3 hard "when condition, try directions" overrides checked first
+- `PatternStrategy`: Cycles through a fixed sequence of moves (exposed as the "Repeat Sequence" preset tile, also usable as a custom rule)
+- `LookAheadStrategy`/`ConditionalStrategy`/`CustomStrategy`: internal/legacy building blocks; stored legacy rule lists are migrated to EvaluationRule on load (see `migrateCustomRules`)
 
 **Strategy Pattern**: All strategies receive the engine instance and query it using `isValidMove()` and `getState()`. They never mutate the engine directly.
 
 ### Custom Rule System (src/engine/customRules.ts)
 
-The custom rule system allows users to define strategies through configuration rather than code:
+The custom rule system allows users to define strategies through configuration rather than code.
 
-**Rule Types**:
-1. **Pattern Rules**: Define a fixed sequence like `['left', 'down', 'right', 'down']`
-2. **Conditional Rules**: If-then logic based on board state (e.g., "if max tile in corner, prefer safe moves")
-3. **Look-Ahead Rules**: Evaluate board positions N moves ahead with configurable evaluation weights
-4. **Weighted Rules**: Score moves immediately based on criteria like empty cells, merge count, monotonicity
+**Rule Types** (consolidated — one authored type plus a preset):
+1. **Evaluation Rule** (`EvaluationRule`): weights (6 criteria) + look-ahead depth (1-5; depth 1 = score the immediate board) + up to `MAX_OVERRIDES` (3) hard if-then overrides. This subsumes the old weighted/lookahead/conditional types.
+2. **Pattern Rule**: a fixed repeating sequence like `['left', 'down', 'right', 'down']` (surfaced as the "Repeat Sequence" preset).
+
+**Legacy migration**: `migrateCustomRules()` upgrades stored weighted (→ depth 1), lookahead (→ same depth), conditional (→ override), and multi-rule chains (→ one evaluation rule) on load and in the worker factory. Deterministic plain-English summaries come from `strategySummary.ts` (`summarizeRules`/`autoName`).
 
 **Board Evaluation Functions** (BoardEvaluator class):
 - `countEmptyTiles()`: Number of empty cells
@@ -145,9 +143,10 @@ When implementing new strategies:
 ## Custom Strategy Builder
 
 ### UI Components
-- **CustomStrategyBuilder** (src/components/CustomStrategyBuilder.tsx): Main container with tabbed interface (Manual/AI)
-- **ManualRuleBuilder** (src/components/ManualRuleBuilder.tsx): Form-based rule creation with dynamic inputs per rule type
+- **CustomStrategyBuilder** (src/components/CustomStrategyBuilder.tsx): Single-page AI-first builder — describe box, one Evaluation form, deterministic summary card, Test Drive (3 fixed-seed games vs Random), auto-naming at save
+- **EvaluationEditor** (src/components/EvaluationEditor.tsx): the one manual form — 6 captioned weight sliders, depth slider, up to 3 overrides
 - **AIStrategyAssistant** (src/components/AIStrategyAssistant.tsx): Natural language interface for AI-powered strategy generation
+- **StrategyPicker** (src/components/StrategyPicker.tsx): tile grid — built-ins, Repeat Sequence preset, saved strategies as first-class tiles, "Create your own" (opens the builder directly); Compare mode accepts saved customs on both sides
 
 ### AI Integration (src/services/aiStrategyGenerator.ts)
 Converts natural language descriptions into rule configurations via OpenAI or Anthropic APIs:
@@ -172,14 +171,12 @@ Converts natural language descriptions into rule configurations via OpenAI or An
 3. Update `BatchConfigPanel.tsx` to expose in UI
 4. Add configuration parameters to UI if needed
 
-### Adding a New Custom Rule Type
-1. Define rule interface in customRules.ts
-2. Add to `CustomRule` union type
-3. Implement evaluation logic in BoardEvaluator or ConditionEvaluator
-4. Add validation in RuleValidator
-5. Update CustomStrategyFactory to handle new rule type
-6. Add UI controls in ManualRuleBuilder
-7. Update AI system prompt in aiStrategyGenerator.ts
+### Extending the Custom Rule Model
+Prefer extending `EvaluationRule` (a new weight criterion or override condition) over adding a rule type:
+1. Add the field/condition in customRules.ts (types + `RuleValidator.validateEvaluationRule` + `migrateCustomRules` if defaults change)
+2. Implement evaluation logic in BoardEvaluator or ConditionEvaluator
+3. Surface it in `EvaluationEditor.tsx` and `strategySummary.ts`
+4. Update the AI schema in shared/aiPrompt.ts and `coerceRule` in aiStrategyGenerator.ts
 
 ### Debugging Game Behavior
 Use fixed seeds for reproducibility:

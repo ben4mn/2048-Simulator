@@ -6,6 +6,12 @@ import type { Board, CornerPosition, Direction } from './types';
 import { GameEngine } from './gameEngine';
 import { runGame } from './gameRunner';
 import { SeededRNG } from './rng';
+import {
+  BoardEvaluator,
+  ConditionEvaluator,
+  DEFAULT_WEIGHTS,
+  type EvaluationRule,
+} from './customRules';
 
 export interface Strategy {
   id: string;
@@ -353,42 +359,38 @@ export class LookAheadStrategy implements Strategy {
 }
 
 /**
- * Weighted Strategy
- * Scores each move based on weighted criteria
+ * Evaluation Strategy — the single custom-strategy runtime.
+ * Hard overrides are checked first (in list order); when none fire, each
+ * candidate move is scored `depth` moves ahead with weighted board
+ * evaluation (depth 1 scores the immediate resulting board).
  */
-export class WeightedStrategy implements Strategy {
-  id = 'weighted';
+export class EvaluationStrategy implements Strategy {
+  id = 'evaluation';
   name: string;
-  private evaluateBoard: (board: Board) => number;
+  private rule: EvaluationRule;
+  private scorer: LookAheadStrategy;
 
-  constructor(evaluateBoard: (board: Board) => number, name?: string) {
-    this.evaluateBoard = evaluateBoard;
-    this.name = name || 'Weighted Evaluation';
+  constructor(rule: EvaluationRule, name?: string) {
+    this.rule = rule;
+    this.name = name || `Evaluation (depth ${rule.depth})`;
+    this.scorer = new LookAheadStrategy(rule.depth, (board: Board) =>
+      BoardEvaluator.evaluateBoard(board, rule.weights)
+    );
   }
 
   selectMove(engine: GameEngine): Direction | null {
-    const directions: Direction[] = ['up', 'down', 'left', 'right'];
-    let bestDirection: Direction | null = null;
-    let bestScore = -Infinity;
+    const board = engine.getBoardView() as Board;
 
-    for (const direction of directions) {
-      if (!engine.isValidMove(direction)) continue;
-
-      // Evaluate the board after this move by cloning (board + RNG position)
-      // instead of replaying the entire move history on a fresh engine.
-      const tempEngine = engine.clone();
-
-      // Make the test move
-      if (tempEngine.move(direction)) {
-        const score = this.evaluateBoard(tempEngine.getBoardView() as Board);
-        if (score > bestScore) {
-          bestScore = score;
-          bestDirection = direction;
+    for (const override of this.rule.overrides ?? []) {
+      if (!ConditionEvaluator.evaluate(board, override.when, override.params)) continue;
+      for (const direction of override.action) {
+        if (engine.isValidMove(direction)) {
+          return direction;
         }
       }
     }
 
-    return bestDirection;
+    return this.scorer.selectMove(engine);
   }
 }
 
@@ -438,6 +440,7 @@ export interface StrategyFactoryParams {
   depth?: number;
   evaluateBoard?: (board: Board) => number;
   strategies?: Strategy[];
+  evaluationRule?: EvaluationRule;
 }
 
 /**
@@ -463,8 +466,11 @@ export function createStrategy(type: string, params?: StrategyFactoryParams): St
         params?.evaluateBoard || (() => 0),
         params?.name
       );
-    case 'weighted':
-      return new WeightedStrategy(params?.evaluateBoard || (() => 0), params?.name);
+    case 'evaluation':
+      return new EvaluationStrategy(
+        params?.evaluationRule || { type: 'evaluation', weights: { ...DEFAULT_WEIGHTS }, depth: 1 },
+        params?.name
+      );
     case 'custom':
       return new CustomStrategy(params?.strategies || [], params?.name);
     default:

@@ -9,7 +9,7 @@ import type { GameState, Direction, GameResult } from '../engine/types';
 import type { SimulationJob, SimulationProgress } from '../workers/simulationWorker';
 import { db } from '../storage/db';
 import type { Batch, Strategy } from '../storage/db';
-import type { CustomRule } from '../engine/customRules';
+import { migrateCustomRules, type CustomRule } from '../engine/customRules';
 
 const MAX_COMPLETED_BATCHES = 10;
 
@@ -18,6 +18,7 @@ const STRATEGY_LABELS: Record<string, string> = {
   corner_anchor: 'Corner Anchor',
   merge_max: 'Merge Maximization',
   random: 'Random',
+  pattern: 'Repeat Sequence',
   custom: 'Custom Strategy',
 };
 
@@ -558,10 +559,33 @@ export const useGameStore = create<GameStore>((set, get) => {
       });
     },
 
-    // Saved strategies
+    // Saved strategies. Legacy rule lists (weighted / lookahead /
+    // conditional / multi-rule) are migrated to the consolidated evaluation
+    // model on load; the original rules are kept alongside for provenance.
     loadSavedStrategies: async () => {
       const strategies = await db.getAllStrategies();
-      set({ savedStrategies: strategies });
+      const upgraded = await Promise.all(
+        strategies.map(async (strategy) => {
+          const rules = strategy.params?.customRules as CustomRule[] | undefined;
+          if (!rules || rules.length === 0) return strategy;
+          const { rules: migrated, converted } = migrateCustomRules(rules);
+          if (!converted) return strategy;
+          const next: Strategy = {
+            ...strategy,
+            params: {
+              ...strategy.params,
+              customRules: migrated,
+              legacyRules: strategy.params.legacyRules ?? rules,
+              converted: true,
+            },
+          };
+          await db.saveStrategy(next).catch(() => {
+            /* keep the in-memory migration even if persistence fails */
+          });
+          return next;
+        })
+      );
+      set({ savedStrategies: upgraded });
     },
 
     saveCustomStrategy: async (name: string, customRules: CustomRule[]) => {

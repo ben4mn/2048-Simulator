@@ -1,79 +1,35 @@
 /**
  * Custom Strategy Factory
- * Converts CustomRule configurations into executable Strategy instances
+ * Converts stored CustomRule configurations into executable Strategy
+ * instances. Legacy rule lists (weighted / lookahead / conditional /
+ * multi-rule chains) are migrated to the consolidated evaluation model
+ * first, so the worker runs every strategy through the same runtime.
  */
 
 import type { CustomRule } from './customRules';
-import { BoardEvaluator, ConditionEvaluator } from './customRules';
-import {
-  PatternStrategy,
-  ConditionalStrategy,
-  LookAheadStrategy,
-  WeightedStrategy,
-  CustomStrategy,
-  type Strategy,
-} from './strategy';
-import type { Board } from './types';
+import { migrateCustomRules } from './customRules';
+import { EvaluationStrategy, PatternStrategy, type Strategy } from './strategy';
 
 export class CustomStrategyFactory {
   /**
-   * Create a strategy from custom rules
+   * Create a strategy from custom rules. After migration a strategy is
+   * exactly one rule (evaluation or pattern); extra rules are ignored.
    */
   static createFromRules(rules: CustomRule[], name?: string): Strategy {
-    const strategies: Strategy[] = [];
+    const { rules: migrated } = migrateCustomRules(rules);
+    const rule = migrated[0];
 
-    for (const rule of rules) {
-      const strategy = this.createStrategyFromRule(rule);
-      if (strategy) {
-        strategies.push(strategy);
-      }
+    if (!rule) {
+      throw new Error('Custom strategy has no rules');
     }
 
-    // If only one rule, return it directly
-    if (strategies.length === 1) {
-      return strategies[0];
-    }
-
-    // Otherwise, wrap in CustomStrategy
-    return new CustomStrategy(strategies, name || 'Custom Strategy');
-  }
-
-  /**
-   * Create a single strategy from a rule
-   */
-  private static createStrategyFromRule(rule: CustomRule): Strategy | null {
     switch (rule.type) {
       case 'pattern':
-        return new PatternStrategy(rule.sequence);
-
-      case 'conditional':
-        return new ConditionalStrategy(
-          [
-            {
-              condition: (board: Board) =>
-                ConditionEvaluator.evaluate(board, rule.condition, rule.conditionParams),
-              actions: rule.action,
-              priority: rule.priority,
-            },
-          ],
-          `Conditional: ${rule.condition}`
-        );
-
-      case 'lookahead':
-        return new LookAheadStrategy(
-          rule.depth,
-          (board: Board) => BoardEvaluator.evaluateBoard(board, rule.evaluationWeights),
-          `Look-Ahead (depth ${rule.depth})`
-        );
-
-      case 'weighted':
-        return new WeightedStrategy(
-          (board: Board) => BoardEvaluator.evaluateBoard(board, rule.weights),
-          'Weighted Evaluation'
-        );
-
+        return new PatternStrategy(rule.sequence, name);
+      case 'evaluation':
+        return new EvaluationStrategy(rule, name);
       default:
-        return null;
+        throw new Error(`Unsupported rule type after migration: ${rule.type}`);
     }
   }
 }

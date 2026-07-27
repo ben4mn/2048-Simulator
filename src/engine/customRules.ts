@@ -8,7 +8,33 @@ import { countEmptyTiles, countMerges, findMaxTile } from './boardUtils';
 
 // ===== Rule Type Definitions =====
 
-export type RuleType = 'pattern' | 'conditional' | 'lookahead' | 'weighted';
+export type RuleType = 'evaluation' | 'pattern' | 'conditional' | 'lookahead' | 'weighted';
+
+/** Maximum hard-override entries on an EvaluationRule (enforced by the validator). */
+export const MAX_OVERRIDES = 3;
+
+/**
+ * A hard if-then entry on an EvaluationRule: when the condition holds, try
+ * the action directions in order before falling back to weighted scoring.
+ * Entries are checked in list order.
+ */
+export interface EvaluationOverride {
+  when: ConditionType;
+  params?: ConditionParams;
+  action: Direction[];
+}
+
+/**
+ * The single custom rule type users author (v2). Weighted scoring of each
+ * candidate move, looking `depth` moves ahead (depth 1 scores the immediate
+ * board — the old "weighted" rule), with optional hard overrides.
+ */
+export interface EvaluationRule {
+  type: 'evaluation';
+  weights: EvaluationWeights;
+  depth: number; // 1-5
+  overrides?: EvaluationOverride[];
+}
 
 export interface PatternRule {
   type: 'pattern';
@@ -34,7 +60,15 @@ export interface WeightedRule {
   weights: EvaluationWeights;
 }
 
-export type CustomRule = PatternRule | ConditionalRule | LookAheadRule | WeightedRule;
+export type CustomRule =
+  | EvaluationRule
+  | PatternRule
+  | ConditionalRule
+  | LookAheadRule
+  | WeightedRule;
+
+/** The rule types the app authors today; legacy types survive only as stored data. */
+export type AuthoredRule = EvaluationRule | PatternRule;
 
 // ===== Condition Types =====
 
@@ -344,8 +378,47 @@ export class RuleValidator {
     return null;
   }
 
+  static validateEvaluationRule(rule: EvaluationRule): string | null {
+    if (!rule.weights) {
+      return 'Weights are required';
+    }
+    if (!Number.isFinite(rule.depth) || rule.depth < 1 || rule.depth > 5) {
+      return 'Depth must be between 1 and 5';
+    }
+    if (rule.overrides) {
+      if (rule.overrides.length > MAX_OVERRIDES) {
+        return `At most ${MAX_OVERRIDES} overrides are allowed`;
+      }
+      const validDirections: Direction[] = ['up', 'down', 'left', 'right'];
+      const validConditions: ConditionType[] = [
+        'max_tile_in_corner',
+        'max_tile_on_edge',
+        'empty_cells_count',
+        'merge_available',
+        'monotonic_rows',
+        'monotonic_cols',
+      ];
+      for (const override of rule.overrides) {
+        if (!validConditions.includes(override.when)) {
+          return `Unknown override condition: ${String(override.when)}`;
+        }
+        if (!override.action || override.action.length === 0) {
+          return 'Override actions cannot be empty';
+        }
+        for (const direction of override.action) {
+          if (!validDirections.includes(direction)) {
+            return `Invalid direction: ${direction}`;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   static validateRule(rule: CustomRule): string | null {
     switch (rule.type) {
+      case 'evaluation':
+        return this.validateEvaluationRule(rule);
       case 'pattern':
         return this.validatePatternRule(rule);
       case 'conditional':
@@ -363,4 +436,90 @@ export class RuleValidator {
       }
     }
   }
+}
+
+// ===== Weight normalization & legacy migration =====
+
+/**
+ * Fill missing/non-finite weight keys with 0 so a partial weights object
+ * (e.g. from an AI response that omitted "smoothness") never rejects the
+ * whole configuration.
+ */
+export function normalizeWeights(partial: Partial<EvaluationWeights> | undefined | null): EvaluationWeights {
+  const keys: (keyof EvaluationWeights)[] = [
+    'emptyTiles',
+    'maxTileValue',
+    'maxTileCorner',
+    'mergeCount',
+    'monotonicity',
+    'smoothness',
+  ];
+  const weights = {} as EvaluationWeights;
+  for (const key of keys) {
+    const value = partial?.[key];
+    weights[key] = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  }
+  return weights;
+}
+
+/**
+ * Upgrade a stored rule list to the consolidated model (evaluation/pattern):
+ * - evaluation / pattern: unchanged
+ * - weighted:   evaluation at depth 1 (lossless — identical runtime)
+ * - lookahead:  evaluation with the same depth and weights
+ * - conditional: an override on an evaluation rule (DEFAULT_WEIGHTS, depth 1)
+ * - multi-rule chains: folded into ONE evaluation rule — conditionals become
+ *   overrides sorted by their old priority (capped at MAX_OVERRIDES), and the
+ *   first evaluator in the chain supplies weights/depth. The old runtime made
+ *   every rule after the first evaluator unreachable, so this is faithful.
+ * Pattern-only strategies stay pattern.
+ */
+export function migrateCustomRules(rules: CustomRule[]): { rules: CustomRule[]; converted: boolean } {
+  const isNew = rules.every((r) => r.type === 'evaluation' || r.type === 'pattern');
+  if (isNew) {
+    return { rules, converted: false };
+  }
+
+  const conditionals = rules.filter((r): r is ConditionalRule => r.type === 'conditional');
+  const evaluator = rules.find(
+    (r): r is EvaluationRule | LookAheadRule | WeightedRule =>
+      r.type === 'evaluation' || r.type === 'lookahead' || r.type === 'weighted'
+  );
+  const firstPattern = rules.find((r): r is PatternRule => r.type === 'pattern');
+
+  // Pattern-only legacy chain (pattern + conditionals with no evaluator):
+  // the pattern was the terminal strategy, keep it if there's nothing else.
+  if (!evaluator && conditionals.length === 0 && firstPattern) {
+    return { rules: [firstPattern], converted: true };
+  }
+
+  const overrides: EvaluationOverride[] = [...conditionals]
+    .sort((a, b) => b.priority - a.priority)
+    .slice(0, MAX_OVERRIDES)
+    .map((rule) => ({
+      when: rule.condition,
+      ...(rule.conditionParams ? { params: rule.conditionParams } : {}),
+      action: rule.action,
+    }));
+
+  const base: EvaluationRule =
+    evaluator?.type === 'evaluation'
+      ? evaluator
+      : evaluator?.type === 'lookahead'
+        ? { type: 'evaluation', weights: normalizeWeights(evaluator.evaluationWeights), depth: evaluator.depth }
+        : evaluator?.type === 'weighted'
+          ? { type: 'evaluation', weights: normalizeWeights(evaluator.weights), depth: 1 }
+          : { type: 'evaluation', weights: { ...DEFAULT_WEIGHTS }, depth: 1 };
+
+  const mergedOverrides = [...overrides, ...(base.overrides ?? [])].slice(0, MAX_OVERRIDES);
+
+  return {
+    rules: [
+      {
+        ...base,
+        ...(mergedOverrides.length > 0 ? { overrides: mergedOverrides } : {}),
+      },
+    ],
+    converted: true,
+  };
 }

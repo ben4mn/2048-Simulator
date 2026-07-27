@@ -8,8 +8,10 @@ import type {
   ConditionParams,
   ConditionType,
   CustomRule,
+  EvaluationOverride,
   EvaluationWeights,
 } from '../engine/customRules';
+import { MAX_OVERRIDES, migrateCustomRules, normalizeWeights } from '../engine/customRules';
 import type { Direction } from '../engine/types';
 
 export type AIProvider = 'openai' | 'anthropic';
@@ -54,16 +56,6 @@ const VALID_CORNERS = [
 ] as const;
 
 const DIRECTIONS = ['up', 'down', 'left', 'right'] as const;
-
-const WEIGHT_KEYS: readonly (keyof EvaluationWeights)[] = [
-  'emptyTiles',
-  'maxTileValue',
-  'maxTileCorner',
-  'mergeCount',
-  'monotonicity',
-  'smoothness',
-];
-
 
 
 export class AIStrategyGenerator {
@@ -398,21 +390,28 @@ export class AIStrategyGenerator {
         };
       }
 
-      // Validate rules
+      // Validate and normalize rules (weight-key defaulting means a missing
+      // weight no longer rejects the whole response), then migrate any
+      // legacy rule shapes to the consolidated evaluation model.
       const validatedRules: CustomRule[] = [];
       for (const rule of rules) {
-        if (!this.isValidRule(rule)) {
+        const coerced = this.coerceRule(rule);
+        if (!coerced) {
           return {
             success: false,
             error: `Invalid rule structure: ${JSON.stringify(rule)}`,
           };
         }
-        validatedRules.push(rule);
+        validatedRules.push(coerced);
+      }
+
+      if (validatedRules.length === 0) {
+        return { success: false, error: 'Response contained no rules' };
       }
 
       return {
         success: true,
-        rules: validatedRules,
+        rules: migrateCustomRules(validatedRules).rules,
         strategyName:
           typeof strategyName === 'string' && strategyName.trim()
             ? strategyName
@@ -440,12 +439,6 @@ export class AIStrategyGenerator {
     );
   }
 
-  private static isValidWeights(value: unknown): value is EvaluationWeights {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    const weights = value as Record<string, unknown>;
-    return WEIGHT_KEYS.every((key) => Number.isFinite(weights[key]));
-  }
-
   private static isValidConditionParams(value: unknown): value is ConditionParams {
     if (value === undefined) return true;
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -462,39 +455,88 @@ export class AIStrategyGenerator {
     return true;
   }
 
+  /** Weights are usable if they're an object; missing keys default via normalizeWeights. */
+  private static isWeightsObject(value: unknown): value is Partial<EvaluationWeights> {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  private static coerceOverrides(value: unknown): EvaluationOverride[] | null {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) return null;
+
+    const overrides: EvaluationOverride[] = [];
+    for (const entry of value.slice(0, MAX_OVERRIDES)) {
+      if (!entry || typeof entry !== 'object') return null;
+      const candidate = entry as Record<string, unknown>;
+      if (!this.isConditionType(candidate.when)) return null;
+      if (!this.isValidConditionParams(candidate.params)) return null;
+      if (!this.isDirectionArray(candidate.action)) return null;
+      overrides.push({
+        when: candidate.when,
+        ...(candidate.params !== undefined ? { params: candidate.params as ConditionParams } : {}),
+        action: candidate.action,
+      });
+    }
+    return overrides;
+  }
+
   /**
-   * Validate rule structure
+   * Validate a rule from the AI and normalize it (clamped depth, defaulted
+   * weight keys, capped overrides). Returns null when the rule is unusable.
+   * Legacy rule shapes are still accepted; the caller migrates them.
    */
-  private static isValidRule(rule: unknown): rule is CustomRule {
-    if (!rule || typeof rule !== 'object') return false;
+  private static coerceRule(rule: unknown): CustomRule | null {
+    if (!rule || typeof rule !== 'object') return null;
     const candidate = rule as Record<string, unknown>;
 
     switch (candidate.type) {
+      case 'evaluation': {
+        if (!this.isWeightsObject(candidate.weights)) return null;
+        const overrides = this.coerceOverrides(candidate.overrides);
+        if (overrides === null) return null;
+        const rawDepth = typeof candidate.depth === 'number' ? Math.floor(candidate.depth) : 1;
+        const depth = Math.max(1, Math.min(rawDepth || 1, 5));
+        return {
+          type: 'evaluation',
+          weights: normalizeWeights(candidate.weights),
+          depth,
+          ...(overrides.length > 0 ? { overrides } : {}),
+        };
+      }
+
       case 'pattern':
-        return this.isDirectionArray(candidate.sequence);
+        return this.isDirectionArray(candidate.sequence)
+          ? { type: 'pattern', sequence: candidate.sequence }
+          : null;
 
       case 'conditional':
-        return (
-          this.isConditionType(candidate.condition) &&
+        return this.isConditionType(candidate.condition) &&
           this.isValidConditionParams(candidate.conditionParams) &&
           this.isDirectionArray(candidate.action) &&
           typeof candidate.priority === 'number' &&
           Number.isFinite(candidate.priority)
-        );
+          ? (candidate as unknown as CustomRule)
+          : null;
 
       case 'lookahead':
-        return (
-          typeof candidate.depth === 'number' &&
+        return typeof candidate.depth === 'number' &&
           candidate.depth >= 1 &&
           candidate.depth <= 5 &&
-          this.isValidWeights(candidate.evaluationWeights)
-        );
+          this.isWeightsObject(candidate.evaluationWeights)
+          ? {
+              type: 'lookahead',
+              depth: candidate.depth,
+              evaluationWeights: normalizeWeights(candidate.evaluationWeights),
+            }
+          : null;
 
       case 'weighted':
-        return this.isValidWeights(candidate.weights);
+        return this.isWeightsObject(candidate.weights)
+          ? { type: 'weighted', weights: normalizeWeights(candidate.weights) }
+          : null;
 
       default:
-        return false;
+        return null;
     }
   }
 }

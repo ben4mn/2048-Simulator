@@ -88,7 +88,7 @@ describe('worker strategy construction (CustomStrategyFactory path)', () => {
     expect(result.maxTile).toBeGreaterThanOrEqual(4);
   });
 
-  it('wraps multiple rules in a CustomStrategy container', () => {
+  it('folds multiple legacy rules into a single evaluation strategy', () => {
     const rules: CustomRule[] = [
       {
         type: 'conditional',
@@ -99,7 +99,7 @@ describe('worker strategy construction (CustomStrategyFactory path)', () => {
       { type: 'pattern', sequence: ['left', 'down'] },
     ];
     const strategy = CustomStrategyFactory.createFromRules(rules, 'Combo');
-    expect(strategy.id).toBe('custom');
+    expect(strategy.id).toBe('evaluation');
     expect(strategy.name).toBe('Combo');
 
     const result = playGameWithStrategy('WORKER-CUSTOM-2', strategy);

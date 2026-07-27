@@ -63,9 +63,14 @@ describe('AIStrategyGenerator', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.rules).toHaveLength(2);
+    // Legacy pattern+conditional payloads are migrated to ONE evaluation rule
+    // with the conditional folded in as an override.
+    expect(result.rules).toHaveLength(1);
     expect(result.strategyName).toBe('Corner Stacker');
-    expect(result.rules?.[0]).toMatchObject({ type: 'pattern', sequence: ['left', 'down'] });
+    expect(result.rules?.[0]).toMatchObject({
+      type: 'evaluation',
+      overrides: [{ when: 'max_tile_in_corner', action: ['left', 'down'] }],
+    });
   });
 
   // KNOWN BUG (aiStrategyGenerator.ts:212-220): the code-fence stripper only
@@ -89,7 +94,7 @@ describe('AIStrategyGenerator', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.rules).toHaveLength(2);
+    expect(result.rules).toHaveLength(1);
   });
 
   // KNOWN BUG (aiStrategyGenerator.ts:270-276): isValidRule only checks that
@@ -125,11 +130,9 @@ describe('AIStrategyGenerator', () => {
     expect(result.error).toBeDefined();
   });
 
-  // KNOWN BUG (aiStrategyGenerator.ts:287-288): isValidRule for 'weighted'
-  // rules only checks `rule.weights && typeof rule.weights === 'object'`. It
-  // never verifies all six EvaluationWeights keys are present with finite
-  // number values, so a partial or malformed weights object is accepted.
-  it('rejects a weighted rule with missing weight keys or non-numeric values', async () => {
+  // Weight-key defaulting: partial or non-numeric weights are normalized
+  // (missing/invalid keys -> 0) instead of rejecting the whole response.
+  it('accepts a weighted rule with missing weight keys (defaulted to 0) and migrates it', async () => {
     const payload = {
       strategyName: 'Bad Weights Strategy',
       rules: [
@@ -154,8 +157,13 @@ describe('AIStrategyGenerator', () => {
       config: { provider: 'anthropic', apiKey: 'test-key' },
     });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBeDefined();
+    expect(result.success).toBe(true);
+    const rule = result.rules?.[0] as unknown as { type: string; weights: Record<string, number>; depth: number };
+    expect(rule).toMatchObject({ type: 'evaluation', depth: 1 });
+    // Non-numeric and missing keys default to 0 instead of rejecting.
+    expect(rule.weights.emptyTiles).toBe(0);
+    expect(rule.weights.maxTileValue).toBe(1.0);
+    expect(rule.weights.smoothness).toBe(0);
   });
 
   // KNOWN BUG: isValidRule never validates conditionParams.corner against the
@@ -288,7 +296,8 @@ describe('AIStrategyGenerator.serverGenerate', () => {
     const result = await AIStrategyGenerator.serverGenerate('Stack tiles in the corner', 'anthropic');
 
     expect(result.success).toBe(true);
-    expect(result.rules).toHaveLength(2);
+    expect(result.rules).toHaveLength(1);
+    expect(result.rules?.[0]).toMatchObject({ type: 'evaluation' });
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/ai/generate-strategy',
       expect.objectContaining({
