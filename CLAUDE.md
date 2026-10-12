@@ -225,5 +225,5 @@ shared/aiPrompt.ts.
 
 - Dev: `npm run server:dev` (port 3000) + `npm run dev` (Vite proxies /api)
 - Tests: server/__tests__/ run as part of `npm test`
-- Deploy: `docker compose up -d --build` on the Debian server (port 3048 → NPM
-  → 2048.zyroi.com); `.env` on the server holds secrets (never committed)
+- Deploy: `docker compose up -d --build` on the Debian server (port 3048
+  → 2084.4mn.org via the debian-sites Cloudflare tunnel); `.env` on the server holds secrets (never committed)

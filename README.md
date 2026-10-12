@@ -1,5 +1,7 @@
 # 2048 Strategy Simulator
 
+Live app: [2084.4mn.org](https://2084.4mn.org).
+
 Play 2048, build your own strategies, and compare their performance in seeded simulations. The app uses React, TypeScript, Vite, Zustand, and a Node/Express backend with SQLite.
 
 ## Features
@@ -53,6 +55,8 @@ docker compose build app
 docker compose up -d --no-deps app
 docker compose logs --tail 30 app
 ```
+
+The production hostname is routed by the Debian server’s `debian-sites` Cloudflare tunnel to `http://localhost:3048`. Hostname changes only require updating that tunnel ingress and DNS; the app container and its persistent account database stay in place.
 
 ## GitHub Pages
 
