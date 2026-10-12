@@ -18,7 +18,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['vite.svg'],
+      includeAssets: ['icon.svg'],
       manifest: {
         name: '2048 Simulator',
         short_name: '2048 Sim',
@@ -29,7 +29,7 @@ export default defineConfig({
         start_url: '.',
         icons: [
           {
-            src: 'vite.svg',
+            src: 'icon.svg',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'any maskable',

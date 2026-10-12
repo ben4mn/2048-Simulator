@@ -10,7 +10,7 @@ import type {
   EvaluationRule,
   EvaluationWeights,
 } from '../engine/customRules';
-import { MAX_OVERRIDES } from '../engine/customRules';
+import { DEFAULT_WEIGHTS, MAX_OVERRIDES } from '../engine/customRules';
 import type { Direction } from '../engine/types';
 
 export interface EvaluationEditorProps {
@@ -77,30 +77,46 @@ export function EvaluationEditor({ rule, onChange }: EvaluationEditorProps) {
     updateOverride(index, { ...override, action });
   };
 
+  const moveOverride = (index: number, delta: number) => {
+    const next = [...(rule.overrides ?? [])];
+    [next[index], next[index + delta]] = [next[index + delta], next[index]];
+    onChange({ ...rule, overrides: next });
+  };
+
   const overrides = rule.overrides ?? [];
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4 rounded-lg border border-dark-border bg-surface-raised p-4">
-        <p className="text-sm font-medium text-text-primary">What matters to this strategy?</p>
+    <div className="space-y-4">
+      <div className="rounded-xl border border-dark-border bg-surface-raised p-4">
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <p className="text-sm font-semibold text-text-primary">What matters to this strategy?</p>
+          <button type="button" onClick={() => onChange({ ...rule, weights: { ...DEFAULT_WEIGHTS } })} className="text-xs text-accent hover:text-amber-300">Reset weights</button>
+        </div>
+        <p className="text-xs text-text-muted mb-4">Raise a weight to favor that trait. Zero turns it off.</p>
+        <div className="grid sm:grid-cols-2 gap-x-6 gap-y-5">
         {WEIGHT_CONFIG.map((config) => (
           <div key={config.key}>
-            <label className="block text-sm font-medium text-text-primary mb-0.5">
-              {config.label}: {rule.weights[config.key].toFixed(1)}
-            </label>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <label htmlFor={`weight-${config.key}`} className="block text-xs font-medium text-text-primary">{config.label}</label>
+              <input type="number" aria-label={`${config.label} weight`} min={0} max={100} step={0.1} value={rule.weights[config.key]}
+                onChange={(event) => { if (event.target.value !== '') updateWeight(config.key, Math.max(0, Math.min(100, Number(event.target.value)))); }}
+                className="w-16 px-2 py-1 rounded-md border border-dark-border bg-surface text-right font-mono text-xs text-accent" />
+            </div>
             <p className="text-xs text-text-muted mb-1">{config.caption}</p>
             <input
+              id={`weight-${config.key}`}
               type="range"
               aria-label={config.label}
               value={rule.weights[config.key]}
               onChange={(e) => updateWeight(config.key, parseFloat(e.target.value))}
               min="0"
-              max={config.max}
+              max={Math.max(config.max, rule.weights[config.key])}
               step="0.1"
               className="w-full accent-accent"
             />
           </div>
         ))}
+        </div>
       </div>
 
       <div className="rounded-lg border border-dark-border bg-surface-raised p-4">
@@ -108,7 +124,7 @@ export function EvaluationEditor({ rule, onChange }: EvaluationEditorProps) {
           Look ahead: {rule.depth} move{rule.depth !== 1 ? 's' : ''}
         </label>
         <p className="text-xs text-text-muted mb-1">
-          Slower but smarter. 1 judges the immediate board; 3+ is much slower on large batches.
+          1 scores the next board. Higher depths explore more moves and take longer.
         </p>
         <input
           type="range"
@@ -120,9 +136,10 @@ export function EvaluationEditor({ rule, onChange }: EvaluationEditorProps) {
           step="1"
           className="w-full accent-accent"
         />
+        <div className="flex justify-between text-[10px] text-text-muted"><span>1 · Fast</span><span>3 · Deeper</span><span>5 · Thorough</span></div>
         {rule.depth >= 3 && (
           <p className="text-xs text-amber-200 mt-1">
-            Depth {rule.depth} can make a 10,000-game batch take a long time.
+            Test depth {rule.depth} on a few games before starting a large batch.
           </p>
         )}
       </div>
@@ -132,10 +149,11 @@ export function EvaluationEditor({ rule, onChange }: EvaluationEditorProps) {
           <div>
             <p className="text-sm font-medium text-text-primary">Hard rules (optional)</p>
             <p className="text-xs text-text-muted">
-              Checked first, in order. Up to {MAX_OVERRIDES}.
+              Checked in order. First legal direction wins; otherwise use the weights. Up to {MAX_OVERRIDES}.
             </p>
           </div>
           <button
+            type="button"
             onClick={addOverride}
             disabled={overrides.length >= MAX_OVERRIDES}
             className="px-3 py-1.5 text-sm bg-surface-elevated border border-dark-border rounded-lg text-text-primary hover:bg-surface disabled:opacity-50"
@@ -146,6 +164,13 @@ export function EvaluationEditor({ rule, onChange }: EvaluationEditorProps) {
 
         {overrides.map((override, index) => (
           <div key={index} className="rounded-lg border border-dark-border p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-text-muted">Rule {index + 1}</span>
+              <div className="flex gap-2">
+                <button type="button" disabled={index === 0} aria-label={`Move override ${index + 1} earlier`} onClick={() => moveOverride(index, -1)} className="text-xs text-text-muted hover:text-accent disabled:opacity-30">↑</button>
+                <button type="button" disabled={index === overrides.length - 1} aria-label={`Move override ${index + 1} later`} onClick={() => moveOverride(index, 1)} className="text-xs text-text-muted hover:text-accent disabled:opacity-30">↓</button>
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-text-muted shrink-0">When</span>
               <select
@@ -158,7 +183,11 @@ export function EvaluationEditor({ rule, onChange }: EvaluationEditorProps) {
                     params:
                       e.target.value === 'max_tile_in_corner'
                         ? { corner: override.params?.corner ?? 'bottom-left' }
-                        : undefined,
+                        : e.target.value === 'empty_cells_count'
+                          ? { threshold: 3 }
+                          : e.target.value === 'monotonic_rows' || e.target.value === 'monotonic_cols'
+                            ? { threshold: 8 }
+                            : undefined,
                   })
                 }
                 className="flex-1 px-2 py-1.5 text-sm border border-dark-border bg-surface-elevated text-text-primary rounded-md"
@@ -170,6 +199,7 @@ export function EvaluationEditor({ rule, onChange }: EvaluationEditorProps) {
                 ))}
               </select>
               <button
+                type="button"
                 onClick={() => removeOverride(index)}
                 aria-label={`Remove override ${index + 1}`}
                 className="text-danger hover:text-red-200 px-2"
@@ -198,22 +228,36 @@ export function EvaluationEditor({ rule, onChange }: EvaluationEditorProps) {
               </select>
             )}
 
+            {(override.when === 'empty_cells_count' || override.when === 'monotonic_rows' || override.when === 'monotonic_cols') && (
+              <label className="flex items-center gap-3 text-xs text-text-muted">
+                {override.when === 'empty_cells_count' ? 'At least this many empty cells' : 'Ordered-pair score greater than'}
+                <input type="number" aria-label={`Override ${index + 1} threshold`} min={0} max={override.when === 'empty_cells_count' ? 16 : 12} step={1}
+                  value={override.params?.threshold ?? (override.when === 'empty_cells_count' ? 3 : 11)}
+                  onChange={(event) => { if (event.target.value !== '') updateOverride(index, { ...override, params: { threshold: Math.max(0, Math.min(override.when === 'empty_cells_count' ? 16 : 12, Math.round(Number(event.target.value)))) } }); }}
+                  className="w-16 rounded-md border border-dark-border bg-surface-elevated px-2 py-1.5 text-text-primary" />
+              </label>
+            )}
+
             <div className="flex items-center gap-2">
               <span className="text-xs text-text-muted shrink-0">try</span>
               {DIRECTIONS.map((direction) => (
                 <button
+                  type="button"
                   key={direction}
                   onClick={() => toggleActionDirection(index, direction)}
+                  aria-pressed={override.action.includes(direction)}
+                  aria-label={`Override ${index + 1}: ${direction}`}
                   className={`px-2.5 py-1 text-xs rounded-md border capitalize ${
                     override.action.includes(direction)
                       ? 'bg-accent text-gray-950 border-accent font-semibold'
                       : 'bg-surface-elevated text-text-muted border-dark-border'
                   }`}
                 >
-                  {direction}
+                  {override.action.includes(direction) && <span className="mr-1 opacity-70">{override.action.indexOf(direction) + 1}.</span>}{direction}
                 </button>
               ))}
             </div>
+            {override.action.length > 1 && <p className="text-[10px] text-text-muted">Priority: {override.action.join(' → ')}. Remove and re-add a direction to move it last.</p>}
             {override.action.length === 0 && (
               <p className="text-xs text-danger">Pick at least one direction.</p>
             )}

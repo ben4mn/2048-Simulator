@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { AIStrategyAssistant } from '../AIStrategyAssistant';
 import { useAuthStore } from '../../store/authStore';
+import { AIStrategyGenerator, type GenerateStrategyResponse } from '../../services/aiStrategyGenerator';
+import type { CustomRule } from '../../engine/customRules';
 
 afterEach(() => {
   cleanup();
@@ -16,7 +18,7 @@ beforeEach(() => {
   useAuthStore.setState({ user: null, status: 'anon', error: null });
 });
 
-function validRulesPayload() {
+function validRulesPayload(): { strategyName: string; rules: CustomRule[] } {
   return {
     strategyName: 'Corner Stacker',
     rules: [{ type: 'pattern', sequence: ['left', 'down'] }],
@@ -60,6 +62,43 @@ describe('AIStrategyAssistant', () => {
     render(<AIStrategyAssistant onGenerate={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Anthropic' }));
     expect(screen.getByText(/using your account \(site key\)/i)).toBeInTheDocument();
+  });
+
+  it('admin without an OpenAI key uses the direct-key flow for OpenAI', () => {
+    useAuthStore.setState({ status: 'authed', user: { id: 'u1', username: 'ben', isAdmin: true, keys: { anthropic: false, openai: false } } });
+    render(<AIStrategyAssistant onGenerate={vi.fn()} />);
+    expect(screen.getByText('API Key')).toBeInTheDocument();
+    expect(screen.queryByText(/using your account/i)).not.toBeInTheDocument();
+  });
+
+  it('switches session keys with the provider instead of sending the previous provider’s key', async () => {
+    sessionStorage.setItem('ai_openai_key', 'sk-openai-session');
+    sessionStorage.setItem('ai_anthropic_key', 'sk-ant-anthropic-session');
+    const generate = vi.spyOn(AIStrategyGenerator, 'generateStrategy').mockResolvedValue({ success: true, ...validRulesPayload() });
+    render(<AIStrategyAssistant onGenerate={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Anthropic' }));
+    fireEvent.change(screen.getByLabelText('Strategy Description'), { target: { value: 'A corner strategy' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Strategy' }));
+    await waitFor(() => expect(generate).toHaveBeenCalledWith(expect.objectContaining({ config: { provider: 'anthropic', apiKey: 'sk-ant-anthropic-session' } })));
+  });
+
+  it('cancels the network request and ignores a late response', async () => {
+    sessionStorage.setItem('ai_openai_key', 'sk-session');
+    let complete!: (result: GenerateStrategyResponse) => void;
+    const generate = vi.spyOn(AIStrategyGenerator, 'generateStrategy').mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
+    const onGenerate = vi.fn();
+    render(<AIStrategyAssistant onGenerate={onGenerate} />);
+    fireEvent.change(screen.getByLabelText('Strategy Description'), { target: { value: 'Keep this description' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Strategy' }));
+    const signal = generate.mock.calls[0][0].signal!;
+    expect(signal.aborted).toBe(false);
+    expect(screen.getByRole('button', { name: 'Anthropic' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel generation' }));
+    expect(signal.aborted).toBe(true);
+    await act(async () => { complete({ success: true, ...validRulesPayload() }); });
+    expect(onGenerate).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Strategy Description')).toHaveValue('Keep this description');
+    expect(screen.getByRole('button', { name: 'Generate Strategy' })).toBeEnabled();
   });
 
   it('server mode: calls the backend and forwards parsed rules to onGenerate', async () => {

@@ -25,6 +25,7 @@ export interface AIConfig {
 export interface GenerateStrategyRequest {
   description: string;
   config: AIConfig;
+  signal?: AbortSignal;
 }
 
 export interface GenerateStrategyResponse {
@@ -83,9 +84,9 @@ export class AIStrategyGenerator {
       let response: string;
 
       if (provider === 'openai') {
-        response = await this.callOpenAI(request.description, apiKey, model);
+        response = await this.callOpenAI(request.description, apiKey, model, request.signal);
       } else if (provider === 'anthropic') {
-        response = await this.callAnthropic(request.description, apiKey, model);
+        response = await this.callAnthropic(request.description, apiKey, model, request.signal);
       } else {
         return {
           success: false,
@@ -142,13 +143,15 @@ export class AIStrategyGenerator {
   static async serverGenerate(
     description: string,
     provider?: AIProvider,
-    model?: string
+    model?: string,
+    signal?: AbortSignal
   ): Promise<GenerateStrategyResponse> {
     try {
       const response = await this.safeFetch('AI strategy', '/api/ai/generate-strategy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        ...(signal ? { signal } : {}),
         body: JSON.stringify({ description, provider, model }),
       });
 
@@ -248,11 +251,13 @@ export class AIStrategyGenerator {
   private static async callOpenAI(
     description: string,
     apiKey: string,
-    model?: string
+    model?: string,
+    signal?: AbortSignal
   ): Promise<string> {
     const usedModel = model || DEFAULT_OPENAI_MODEL;
     const response = await this.safeFetch('OpenAI', 'https://api.openai.com/v1/chat/completions', {
       method: 'POST',
+      ...(signal ? { signal } : {}),
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
@@ -288,11 +293,13 @@ export class AIStrategyGenerator {
   private static async callAnthropic(
     description: string,
     apiKey: string,
-    model?: string
+    model?: string,
+    signal?: AbortSignal
   ): Promise<string> {
     const usedModel = model || DEFAULT_ANTHROPIC_MODEL;
     const response = await this.safeFetch('Anthropic', 'https://api.anthropic.com/v1/messages', {
       method: 'POST',
+      ...(signal ? { signal } : {}),
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,

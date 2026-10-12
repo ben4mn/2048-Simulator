@@ -39,16 +39,20 @@ self.onmessage = (e: MessageEvent) => {
 };
 
 function runSimulation(job: SimulationJob) {
+  if (!Array.isArray(job.seeds) || job.seeds.length === 0) {
+    throw new Error('Simulation needs at least one game seed');
+  }
   // Build a fresh strategy per game so stateful strategies (pattern cursor,
   // seeded RNG stream) cannot leak state from one game into the next.
   const makeStrategy = () =>
-    job.customRules && job.customRules.length > 0
-      ? CustomStrategyFactory.createFromRules(job.customRules, job.customStrategyName)
+    job.strategyType === 'custom' || (job.customRules && job.customRules.length > 0)
+      ? CustomStrategyFactory.createFromRules(job.customRules ?? [], job.customStrategyName)
       : createStrategy(job.strategyType, job.strategyParams as StrategyFactoryParams | undefined);
 
   // Buffer of results not yet posted to the main thread (delta since the
   // last progress message).
   let pendingResults: GameResult[] = [];
+  let lastProgressAt = Date.now();
 
   for (let i = 0; i < job.seeds.length; i++) {
     const seed = job.seeds[i];
@@ -76,10 +80,11 @@ function runSimulation(job: SimulationJob) {
 
     pendingResults.push(result);
 
-    // Send progress update every 10 games or on completion. Each message
-    // carries only the delta since the previous message (see
+    // Report the first game immediately; between games, flush after 250ms
+    // for slower strategies. Fast batches amortize messages in groups of 10.
+    // Each message carries only the delta since the previous message (see
     // SimulationProgress.results); the store accumulates.
-    if ((i + 1) % 10 === 0 || i === job.seeds.length - 1) {
+    if (i === 0 || pendingResults.length >= 10 || gameEndTime - lastProgressAt >= 250 || i === job.seeds.length - 1) {
       const progress: SimulationProgress = {
         jobId: job.jobId,
         completed: i + 1,
@@ -87,6 +92,7 @@ function runSimulation(job: SimulationJob) {
         results: pendingResults,
       };
       pendingResults = [];
+      lastProgressAt = gameEndTime;
       self.postMessage(progress);
     }
   }

@@ -116,3 +116,21 @@ describe('strategy run reproducibility (known bugs)', () => {
     }
   });
 });
+
+
+describe('history-free search snapshots', () => {
+  it('keeps RNG, board, score and flags identical while omitting prior history', () => {
+    const engine = new GameEngine('SEARCH-SNAPSHOT');
+    for (let i = 0; i < 30 && !engine.isGameOver(); i++) engine.move(engine.getValidMoves()[0]);
+    const full = engine.clone();
+    const search = engine.clone({ includeHistory: false });
+    const initialHistory = engine.getState().moves;
+    expect(search.getState().moves).toEqual([]);
+    for (let i = 0; i < 20 && !full.isGameOver(); i++) {
+      const direction = full.getValidMoves()[0];
+      expect(search.move(direction)).toBe(full.move(direction));
+      expect({ ...search.getState(), moves: [] }).toEqual({ ...full.getState(), moves: [] });
+    }
+    expect(engine.getState().moves).toEqual(initialHistory);
+  });
+});

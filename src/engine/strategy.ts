@@ -10,6 +10,7 @@ import {
   BoardEvaluator,
   ConditionEvaluator,
   DEFAULT_WEIGHTS,
+  normalizeWeights,
   type EvaluationRule,
 } from './customRules';
 
@@ -219,7 +220,11 @@ export class PatternStrategy implements Strategy {
   private currentIndex: number = 0;
 
   constructor(pattern: Direction[], name?: string) {
-    this.pattern = pattern;
+    const directions: Direction[] = ['up', 'down', 'left', 'right'];
+    if (!Array.isArray(pattern) || pattern.length === 0 || pattern.some((direction) => !directions.includes(direction))) {
+      throw new Error('A move sequence needs at least one valid direction');
+    }
+    this.pattern = [...pattern];
     this.name = name || `Pattern (${pattern.join('-')})`;
   }
 
@@ -313,9 +318,8 @@ export class LookAheadStrategy implements Strategy {
     let bestScore = -Infinity;
 
     for (const direction of directions) {
-      if (!engine.isValidMove(direction)) continue;
-
-      // Simulate the move
+      // evaluateMove rejects invalid candidates while applying the move;
+      // avoid calculating the same slide twice at every search node.
       const score = this.evaluateMove(engine, direction, this.depth);
       if (score > bestScore) {
         bestScore = score;
@@ -327,9 +331,9 @@ export class LookAheadStrategy implements Strategy {
   }
 
   private evaluateMove(engine: GameEngine, direction: Direction, depth: number): number {
-    // Clone the engine (board + score + exact RNG stream position) instead of
-    // replaying the full move history on a fresh engine — O(1) vs O(moves).
-    const tempEngine = engine.clone();
+    // Search needs the board and exact RNG stream, but never move history.
+    // Omitting history avoids copying thousands of moves at every branch.
+    const tempEngine = engine.clone({ includeHistory: false });
 
     // Make the test move
     if (!tempEngine.move(direction)) {
@@ -337,7 +341,7 @@ export class LookAheadStrategy implements Strategy {
     }
 
     // If we've reached target depth, evaluate
-    if (depth === 1) {
+    if (depth === 1 || tempEngine.isGameOver()) {
       return this.evaluateBoard(tempEngine.getBoardView() as Board);
     }
 
@@ -348,10 +352,8 @@ export class LookAheadStrategy implements Strategy {
     let bestScore = -Infinity;
 
     for (const nextDir of directions) {
-      if (tempEngine.isValidMove(nextDir)) {
-        const score = this.evaluateMove(tempEngine, nextDir, depth - 1);
-        if (score > bestScore) bestScore = score;
-      }
+      const score = this.evaluateMove(tempEngine, nextDir, depth - 1);
+      if (score > bestScore) bestScore = score;
     }
 
     return bestScore !== -Infinity ? bestScore : this.evaluateBoard(tempEngine.getBoardView() as Board);
@@ -371,10 +373,10 @@ export class EvaluationStrategy implements Strategy {
   private scorer: LookAheadStrategy;
 
   constructor(rule: EvaluationRule, name?: string) {
-    this.rule = rule;
+    this.rule = { ...rule, weights: normalizeWeights(rule.weights) };
     this.name = name || `Evaluation (depth ${rule.depth})`;
     this.scorer = new LookAheadStrategy(rule.depth, (board: Board) =>
-      BoardEvaluator.evaluateBoard(board, rule.weights)
+      BoardEvaluator.evaluateBoard(board, this.rule.weights)
     );
   }
 

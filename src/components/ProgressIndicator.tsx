@@ -26,7 +26,14 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
           {current} / {total} ({percentage}%)
         </span>
       </div>
-      <div className="w-full bg-surface-raised border border-dark-border rounded-full h-4 overflow-hidden">
+      <div
+        role="progressbar"
+        aria-label={label}
+        aria-valuenow={current}
+        aria-valuemin={0}
+        aria-valuemax={total}
+        className="w-full bg-surface-raised border border-dark-border rounded-full h-4 overflow-hidden"
+      >
         <div
           className="bg-accent h-full rounded-full transition-all duration-300 ease-out relative overflow-hidden"
           style={{ width: `${percentage}%` }}

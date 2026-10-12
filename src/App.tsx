@@ -15,26 +15,41 @@ function App() {
   // re-rendering the shell on every interactive move.
   const engine = useGameStore((s) => s.engine)
 
-  const { viewMode, setViewMode, batchResults, selectedGameId, selectGame, storageError, clearStorageError } =
-    useGameStore(
-      useShallow((s) => ({
-        viewMode: s.viewMode,
-        setViewMode: s.setViewMode,
-        batchResults: s.batchResults,
-        selectedGameId: s.selectedGameId,
-        selectGame: s.selectGame,
-        storageError: s.storageError,
-        clearStorageError: s.clearStorageError,
-      }))
-    )
+  const {
+    viewMode,
+    setViewMode,
+    batchResults,
+    selectedGameId,
+    selectGame,
+    storageError,
+    clearStorageError,
+  } = useGameStore(
+    useShallow((s) => ({
+      viewMode: s.viewMode,
+      setViewMode: s.setViewMode,
+      batchResults: s.batchResults,
+      selectedGameId: s.selectedGameId,
+      selectGame: s.selectGame,
+      storageError: s.storageError,
+      clearStorageError: s.clearStorageError,
+    })),
+  )
 
   const [playSeed, setPlaySeed] = useState('')
 
-  const handlePlaySeed = useCallback((seed: string) => {
-    setPlaySeed(seed)
-    setViewMode('play')
-    useGameStore.getState().startNewGame(seed)
-  }, [setViewMode])
+  useEffect(() => {
+    const scrollContainer = document.getElementById('root')
+    if (scrollContainer) scrollContainer.scrollTop = 0
+  }, [viewMode])
+
+  const handlePlaySeed = useCallback(
+    (seed: string) => {
+      setPlaySeed(seed)
+      setViewMode('play')
+      useGameStore.getState().startNewGame(seed)
+    },
+    [setViewMode],
+  )
 
   const handleMove = useCallback((direction: Direction) => {
     useGameStore.getState().makeMove(direction)
@@ -65,12 +80,30 @@ function App() {
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const { viewMode, gameState } = useGameStore.getState()
+      const { viewMode, gameState, selectedGameId } = useGameStore.getState()
+      const target = e.target instanceof Element ? e.target : null
+      if (
+        e.defaultPrevented ||
+        e.altKey ||
+        e.ctrlKey ||
+        e.metaKey ||
+        selectedGameId ||
+        target?.closest(
+          'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="dialog"]',
+        )
+      )
+        return
       // Match the swipe hook's enablement: no input once the game has ended,
       // so keys can't mutate the finished game behind the win/lose overlay.
-      if (viewMode !== 'play' || !gameState || gameState.gameOver || gameState.won) return
+      if (
+        viewMode !== 'play' ||
+        !gameState ||
+        gameState.gameOver ||
+        gameState.won
+      )
+        return
 
-      const direction = keyMap[e.key]
+      const direction = keyMap[e.key] ?? keyMap[e.key.toLowerCase()]
       if (direction) {
         e.preventDefault()
         handleMove(direction)
@@ -84,7 +117,9 @@ function App() {
   if (!engine) {
     return (
       <div className="min-h-dvh bg-app-bg flex items-center justify-center">
-        <div className="text-lg font-medium text-text-muted">Loading game engine...</div>
+        <div className="text-lg font-medium text-text-muted">
+          Loading game engine...
+        </div>
       </div>
     )
   }
@@ -100,46 +135,55 @@ function App() {
         <div className="absolute top-1/3 -left-36 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" />
       </div>
 
-      <div className="container mx-auto px-4 py-4 md:py-8 pb-20 md:pb-6 relative z-10">
-        <header className="text-center mb-6 hidden md:block">
-          <h1 className="text-4xl font-bold tracking-tight text-text-primary mb-1">2048 Simulator</h1>
-          <p className="text-sm text-text-muted">Test, Compare, and Evolve Strategy Performance</p>
-        </header>
-
-        <div className="max-w-6xl mx-auto mb-6 hidden md:block">
-          <div className="flex justify-center gap-2 rounded-2xl border border-dark-border bg-surface backdrop-blur-xs p-2">
-            <button
-              onClick={() => setViewMode('play')}
-              className={`px-6 py-3 font-semibold rounded-xl transition-all ${
-                viewMode === 'play'
-                  ? 'bg-accent text-gray-950 shadow-lg shadow-amber-500/20'
-                  : 'bg-surface-raised text-text-muted hover:text-text-primary hover:bg-surface-elevated'
-              }`}
+      <div className="container mx-auto px-4 py-4 md:py-8 pb-20 md:pb-6 relative">
+        <header className="max-w-6xl mx-auto flex items-center justify-between gap-4 mb-7 md:mb-10 border-b border-dark-border pb-5">
+          <div className="flex items-center gap-3">
+            <div
+              aria-hidden="true"
+              className="grid grid-cols-2 gap-1 w-9 h-9 rotate-[-6deg]"
             >
-              Play
-            </button>
-            <button
-              onClick={() => setViewMode('batch')}
-              className={`px-6 py-3 font-semibold rounded-xl transition-all ${
-                viewMode === 'batch'
-                  ? 'bg-accent text-gray-950 shadow-lg shadow-amber-500/20'
-                  : 'bg-surface-raised text-text-muted hover:text-text-primary hover:bg-surface-elevated'
-              }`}
-            >
-              Batch Simulation
-            </button>
-            <button
-              onClick={() => setViewMode('results')}
-              className={`px-6 py-3 font-semibold rounded-xl transition-all ${
-                viewMode === 'results'
-                  ? 'bg-accent text-gray-950 shadow-lg shadow-amber-500/20'
-                  : 'bg-surface-raised text-text-muted hover:text-text-primary hover:bg-surface-elevated'
-              }`}
-            >
-              Results ({batchResults.length})
-            </button>
+              <span className="rounded bg-accent/25" />
+              <span className="rounded bg-accent/50" />
+              <span className="rounded bg-accent/75" />
+              <span className="rounded bg-accent" />
+            </div>
+            <div>
+              <div className="font-semibold text-lg leading-tight tracking-tight">
+                2048
+                <span className="text-text-muted font-normal ml-1.5">
+                  Strategy Lab
+                </span>
+              </div>
+              <p className="text-[10px] text-text-muted tracking-wider mt-0.5">
+                PLAY. EXPERIMENT. EVOLVE.
+              </p>
+            </div>
           </div>
-        </div>
+          <nav
+            aria-label="Main navigation"
+            className="hidden md:flex gap-1 rounded-xl bg-surface border border-dark-border p-1"
+          >
+            {(
+              [
+                { view: 'play', label: 'Play' },
+                { view: 'batch', label: 'Simulator' },
+                {
+                  view: 'results',
+                  label: `Results${batchResults.length ? ` · ${batchResults.length.toLocaleString()}` : ''}`,
+                },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.view}
+                onClick={() => setViewMode(tab.view)}
+                aria-current={viewMode === tab.view ? 'page' : undefined}
+                className={`px-5 py-2 text-sm font-medium rounded-lg transition-colors ${viewMode === tab.view ? 'bg-accent text-gray-950' : 'text-text-muted hover:text-text-primary hover:bg-surface-raised'}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </header>
 
         <main className="max-w-6xl mx-auto">
           {storageError && (
@@ -163,9 +207,13 @@ function App() {
             />
           )}
 
-          {viewMode === 'batch' && <BatchView />}
+          <div hidden={viewMode !== 'batch'}>
+            <BatchView />
+          </div>
 
-          {viewMode === 'results' && <ResultsView onPlaySeed={handlePlaySeed} />}
+          {viewMode === 'results' && (
+            <ResultsView onPlaySeed={handlePlaySeed} />
+          )}
         </main>
       </div>
 

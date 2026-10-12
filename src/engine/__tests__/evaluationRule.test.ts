@@ -226,3 +226,29 @@ describe('EvaluationStrategy runtime', () => {
     expect(outcome.moveCount).toBeGreaterThan(0);
   });
 });
+
+
+describe('malformed custom strategy runtime guards', () => {
+  it('defaults omitted evaluation weights so a partial config still chooses a valid move', () => {
+    const strategy = CustomStrategyFactory.createFromRules([{
+      type: 'evaluation', depth: 1, weights: { emptyTiles: 3 } as EvaluationRule['weights'],
+    }]);
+    const engine = new GameEngine('PARTIAL-WEIGHTS');
+    const move = strategy.selectMove(engine);
+    expect(move).not.toBeNull();
+    expect(engine.isValidMove(move!)).toBe(true);
+  });
+
+  it('rejects unknown rule types instead of silently turning them into a default evaluator', () => {
+    expect(() => CustomStrategyFactory.createFromRules([{ type: 'typo' } as unknown as CustomRule])).toThrow(/Unknown rule/);
+  });
+
+  it('rejects malformed override actions and invalid depth before running a game', () => {
+    expect(() => CustomStrategyFactory.createFromRules([evalRule({ depth: Infinity })])).toThrow(/Depth/);
+    expect(() => CustomStrategyFactory.createFromRules([evalRule({ overrides: [{ when: 'merge_available', action: [] }] })])).toThrow(/actions/);
+  });
+
+  it('rejects an empty built-in move pattern', () => {
+    expect(() => createStrategy('pattern', { pattern: [] })).toThrow(/at least one valid direction/);
+  });
+});

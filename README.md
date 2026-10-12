@@ -1,58 +1,64 @@
 # 2048 Strategy Simulator
 
-An experimental simulator designed to test and compare different approaches to playing 2048. Explore manual strategies, algorithmic approaches, and AI-driven gameplay to understand optimal decision-making in this classic puzzle game.
+Play 2048, build your own strategies, and compare their performance in seeded simulations. The app uses React, TypeScript, Vite, Zustand, and a Node/Express backend with SQLite.
 
 ## Features
 
-- Multiple strategy implementations
-- Performance comparison between approaches
-- Visual game state representation
-- Configurable simulation parameters
+- Interactive games with keyboard and swipe controls.
+- Built-in strategies and a custom strategy builder with evaluation rules.
+- Background batch simulations, progress tracking, results, and game replays.
+- Reproducible games using seeds and locally saved strategies and results.
+- Optional accounts and AI strategy assistance with encrypted provider keys.
+- An installable PWA with offline access to the simulator after loading it once.
 
-## Tech Stack
+## Local development
 
-React, TypeScript, Vite, Tailwind CSS, Zustand
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-
-### Installation
+Use **Node.js 22.12 or newer** and npm. Node 20 is unsupported by the current SQLite and testing dependencies.
 
 ```bash
-npm install
+npm ci
+npm run server:dev
 ```
 
-### Running
+In a second terminal:
 
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser.
+Open `http://localhost:5173`. Vite forwards `/api` requests to the backend on port 3000. Local server data defaults to `./data`; development secrets are generated automatically if unset. To keep sessions and stored API keys across restarts, pass stable secrets through the server environment.
 
-## PWA
+Validate changes with:
 
-The app is configured as a Progressive Web App via `vite-plugin-pwa`:
+```bash
+npm run lint
+npm test
+npm run build
+npm run server:build
+```
 
-- installable on supported browsers
-- offline cache for built assets
-- auto-updating service worker
+## Container deployment
 
-## GitHub Pages Deployment
+Copy `.env.example` to `.env`. Set `JWT_SECRET` and `KEY_ENCRYPTION_SECRET` to separate values of at least 32 characters; `openssl rand -hex 32` generates a suitable value. Keep both secrets stable across deployments. Set admin credentials and provider keys if needed.
 
-This repo includes `.github/workflows/deploy-pages.yml` to deploy automatically on pushes to `main`.
+```bash
+docker compose up -d --build app
+```
 
-To enable hosting:
+The container serves the frontend and API at `http://localhost:3048`. SQLite data persists in `./data`, mounted at `/data` inside the container. To update an existing checkout:
 
-1. In GitHub, go to `Settings -> Pages`.
-2. Set Source to `GitHub Actions`.
-3. Push to `main`.
+```bash
+git pull --ff-only origin main
+docker compose build app
+docker compose up -d --no-deps app
+docker compose logs --tail 30 app
+```
 
-The workflow builds with a repo-aware base path so it works on Pages project URLs.
+## GitHub Pages
+
+Pushes to `main` run lint, tests, frontend and server compilation, and deploy the frontend through `.github/workflows/deploy-pages.yml`. Set repository **Settings → Pages → Source** to **GitHub Actions**. The build uses the repository name as its base path.
+
+GitHub Pages hosts the simulator as a static app. Accounts and AI assistance require the Node backend provided by the container deployment.
 
 ## License
 

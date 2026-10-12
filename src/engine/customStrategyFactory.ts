@@ -7,7 +7,7 @@
  */
 
 import type { CustomRule } from './customRules';
-import { migrateCustomRules } from './customRules';
+import { migrateCustomRules, RuleValidator } from './customRules';
 import { EvaluationStrategy, PatternStrategy, type Strategy } from './strategy';
 
 export class CustomStrategyFactory {
@@ -16,6 +16,13 @@ export class CustomStrategyFactory {
    * exactly one rule (evaluation or pattern); extra rules are ignored.
    */
   static createFromRules(rules: CustomRule[], name?: string): Strategy {
+    if (!Array.isArray(rules) || rules.length === 0) {
+      throw new Error('Custom strategy has no rules');
+    }
+    for (const rule of rules) {
+      const error = RuleValidator.validateRule(rule);
+      if (error) throw new Error(error);
+    }
     const { rules: migrated } = migrateCustomRules(rules);
     const rule = migrated[0];
 

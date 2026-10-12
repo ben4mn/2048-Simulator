@@ -28,3 +28,7 @@ data/
 *.sln
 *.sw?
 2048’s.pdf
+
+# Browser verification artifacts
+.playwright-cli/
+output/playwright/

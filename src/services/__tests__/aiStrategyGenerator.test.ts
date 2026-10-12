@@ -343,4 +343,15 @@ describe('AIStrategyGenerator.serverGenerate', () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/unexpected response shape/i);
   });
+
+  it('forwards cancellation to both server and direct-provider fetches', async () => {
+    const controller = new AbortController();
+    const fetchMock = mockFetchOnce({ ok: true, jsonBody: { content: JSON.stringify(validRulesPayload()) } });
+    await AIStrategyGenerator.serverGenerate('desc', 'anthropic', undefined, controller.signal);
+    expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+
+    const directFetch = mockFetchOnce({ ok: true, jsonBody: anthropicTextResponse(JSON.stringify(validRulesPayload())) });
+    await AIStrategyGenerator.generateStrategy({ description: 'desc', config: { provider: 'anthropic', apiKey: 'sk-ant-test' }, signal: controller.signal });
+    expect(directFetch.mock.calls[0][1].signal).toBe(controller.signal);
+  });
 });

@@ -33,16 +33,16 @@ export class GameEngine {
    * Create an independent copy of this engine: identical board, score, move
    * history, flags, and (critically) the exact RNG stream position. The clone
    * and the original evolve independently; the same subsequent moves produce
-   * identical spawns on both. O(1) alternative to replaying the full move
-   * history on a fresh engine.
+   * identical spawns on both. Search can omit history to keep cloning cost
+   * independent of the number of moves already played.
    */
-  clone(): GameEngine {
+  clone(options: { includeHistory?: boolean } = {}): GameEngine {
     return new GameEngine(this.seed, {
       rngState: this.rng.getInternalState(),
       state: {
         ...this.state,
         board: this.copyBoard(this.state.board),
-        moves: [...this.state.moves],
+        moves: options.includeHistory === false ? [] : [...this.state.moves],
       },
     });
   }

@@ -6,7 +6,8 @@
  * function playGameWithStrategy delegates to. Pinning the loop behavior on
  * playGameWithStrategy therefore pins the worker's loop too.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SimulationJob, SimulationProgress } from '../simulationWorker';
 import { playGameWithStrategy, type Strategy } from '../../engine/strategy';
 import { CustomStrategyFactory } from '../../engine/customStrategyFactory';
 import { GameEngine } from '../../engine/gameEngine';
@@ -117,5 +118,76 @@ describe('worker strategy construction (CustomStrategyFactory path)', () => {
     expect(typeof r.maxTile).toBe('number');
     expect(typeof r.won).toBe('boolean');
     expect(r.moveCount).toBe(r.moves.length);
+  });
+});
+
+
+describe('actual worker message protocol', () => {
+  let messages: SimulationProgress[];
+  let workerScope: { onmessage: ((event: MessageEvent<SimulationJob>) => void) | null; postMessage: (message: SimulationProgress) => void };
+
+  beforeEach(async () => {
+    messages = [];
+    workerScope = { onmessage: null, postMessage: (message) => messages.push(structuredClone(message)) };
+    vi.stubGlobal('self', workerScope);
+    vi.resetModules();
+    await import('../simulationWorker');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const job = (extra: Partial<SimulationJob> = {}): SimulationJob => ({
+    jobId: 'protocol-job', strategyId: 'random-1', strategyType: 'random',
+    seeds: ['SAME-SEED'], batchId: 'protocol-batch', ...extra,
+  });
+
+  it('posts the first game immediately, then sends deltas without repeating any results', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1000);
+    workerScope.onmessage!({ data: job({ seeds: Array.from({ length: 25 }, (_, i) => `SEED-${i}`) }) } as MessageEvent<SimulationJob>);
+    expect(messages.map((message) => message.completed)).toEqual([1, 11, 21, 25]);
+    expect(messages.map((message) => message.results.length)).toEqual([1, 10, 10, 4]);
+    const results = messages.flatMap((message) => message.results);
+    expect(new Set(results.map((result) => result.id)).size).toBe(25);
+    expect(results.every((result) => result.batchId === 'protocol-batch')).toBe(true);
+  });
+
+  it('flushes slow-game results after 250ms without waiting for ten games', () => {
+    let timestamp = 0;
+    // Each game consumes 300ms across its start/end clock samples. The first
+    // result posts immediately; subsequent games cross the 250ms threshold.
+    vi.spyOn(Date, 'now').mockImplementation(() => timestamp += 150);
+    workerScope.onmessage!({ data: job({ seeds: ['SLOW-1', 'SLOW-2', 'SLOW-3', 'SLOW-4'] }) } as MessageEvent<SimulationJob>);
+    expect(messages.map((message) => message.completed)).toEqual([1, 2, 3, 4]);
+    expect(messages.every((message) => message.results.length === 1)).toBe(true);
+    expect(new Set(messages.flatMap((message) => message.results.map((result) => result.id))).size).toBe(4);
+  });
+
+  it('repeated seeded custom pattern games have identical results independent of position in a batch', () => {
+    workerScope.onmessage!({ data: job({
+      strategyType: 'custom', seeds: ['FIXED', 'OTHER', 'FIXED'],
+      customRules: [{ type: 'pattern', sequence: ['left', 'down', 'right', 'up'] }],
+    }) } as MessageEvent<SimulationJob>);
+    const results = messages.flatMap((message) => message.results);
+    expect(results[2].moves).toBe(results[0].moves);
+    expect(results[2].finalScore).toBe(results[0].finalScore);
+    expect(results[2].maxTile).toBe(results[0].maxTile);
+  });
+
+  it('fails malformed custom sequences promptly instead of spinning forever', () => {
+    expect(() => workerScope.onmessage!({ data: job({
+      strategyType: 'custom', customRules: [{ type: 'pattern', sequence: [] }],
+    }) } as MessageEvent<SimulationJob>)).toThrow(/empty/i);
+    expect(messages).toHaveLength(0);
+  });
+
+  it('rejects a custom job without rules instead of recording a zero-move loss', () => {
+    expect(() => workerScope.onmessage!({ data: job({ strategyType: 'custom' }) } as MessageEvent<SimulationJob>)).toThrow(/no rules/);
+  });
+
+  it('rejects an empty job rather than silently leaving a batch running forever', () => {
+    expect(() => workerScope.onmessage!({ data: job({ seeds: [] }) } as MessageEvent<SimulationJob>)).toThrow(/at least one/);
   });
 });

@@ -3,6 +3,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../storage/db';
 import { useGameStore } from '../gameStore';
+import type { SimulationJob } from '../../workers/simulationWorker';
 
 /**
  * Minimal fake Worker implementation so gameStore's worker-lifecycle logic
@@ -15,14 +16,15 @@ class FakeWorker {
   onerror: ((event: ErrorEvent) => void) | null = null;
   onmessageerror: ((event: MessageEvent) => void) | null = null;
   readonly url: string;
+  job: SimulationJob | null = null;
 
   constructor(url: URL | string) {
     this.url = url.toString();
     FakeWorker.instances.push(this);
   }
 
-  postMessage(): void {
-    // no-op: tests trigger progress manually via onmessage
+  postMessage(job: SimulationJob): void {
+    this.job = job;
   }
 
   terminate(): void {
@@ -34,7 +36,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('gameStore batch worker lifecycle', () => {
   beforeEach(async () => {
-    (globalThis as any).indexedDB = new IDBFactory();
+    vi.stubGlobal('indexedDB', new IDBFactory());
     await db.init();
 
     FakeWorker.instances = [];
@@ -50,7 +52,9 @@ describe('gameStore batch worker lifecycle', () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    useGameStore.getState().stopBatchSimulation();
+    await flush();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -140,7 +144,7 @@ describe('gameStore batch worker lifecycle', () => {
 
     worker.onmessage?.({
       data: {
-        jobId: 'job_1',
+        jobId: worker.job!.jobId,
         completed: 1,
         total: 1,
         results: [
@@ -172,7 +176,7 @@ describe('gameStore batch worker lifecycle', () => {
 
 describe('gameStore delta progress messages', () => {
   beforeEach(async () => {
-    (globalThis as any).indexedDB = new IDBFactory();
+    vi.stubGlobal('indexedDB', new IDBFactory());
     await db.init();
 
     FakeWorker.instances = [];
@@ -189,7 +193,9 @@ describe('gameStore delta progress messages', () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    useGameStore.getState().stopBatchSimulation();
+    await flush();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -224,7 +230,7 @@ describe('gameStore delta progress messages', () => {
     // Worker now posts only the results since the previous progress message.
     worker.onmessage?.({
       data: {
-        jobId: 'job_1',
+        jobId: worker.job!.jobId,
         completed: 2,
         total: 4,
         results: [makeResult('g1', batchId), makeResult('g2', batchId)],
@@ -233,10 +239,12 @@ describe('gameStore delta progress messages', () => {
     await flush();
 
     expect(useGameStore.getState().batchProgress).toBe(2);
+    expect(useGameStore.getState().isRunningBatch).toBe(true);
+    expect(useGameStore.getState().batchResults.map((result) => result.id)).toEqual(['g1', 'g2']);
 
     worker.onmessage?.({
       data: {
-        jobId: 'job_1',
+        jobId: worker.job!.jobId,
         completed: 4,
         total: 4,
         results: [makeResult('g3', batchId), makeResult('g4', batchId)],
@@ -268,7 +276,7 @@ describe('gameStore delta progress messages', () => {
 
 describe('gameStore compare-mode orchestration', () => {
   beforeEach(async () => {
-    (globalThis as any).indexedDB = new IDBFactory();
+    vi.stubGlobal('indexedDB', new IDBFactory());
     await db.init();
 
     FakeWorker.instances = [];
@@ -293,7 +301,9 @@ describe('gameStore compare-mode orchestration', () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    useGameStore.getState().stopBatchSimulation();
+    await flush();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -337,7 +347,7 @@ describe('gameStore compare-mode orchestration', () => {
 
     workerA.onmessage?.({
       data: {
-        jobId: 'job_1',
+        jobId: workerA.job!.jobId,
         completed: 2,
         total: 2,
         results: [
@@ -364,7 +374,7 @@ describe('gameStore compare-mode orchestration', () => {
 
     workerB.onmessage?.({
       data: {
-        jobId: 'job_2',
+        jobId: workerB.job!.jobId,
         completed: 2,
         total: 2,
         results: [
@@ -377,6 +387,7 @@ describe('gameStore compare-mode orchestration', () => {
     await vi.waitFor(() => {
       expect(useGameStore.getState().isRunningComparison).toBe(false);
       expect(useGameStore.getState().selectedComparisonId).toBe(comparisonId);
+      expect(useGameStore.getState().comparisonResultsB).toHaveLength(2);
     });
 
     expect(useGameStore.getState().compareBatchIdB).toBe(batchIdB);
@@ -415,5 +426,232 @@ describe('gameStore compare-mode orchestration', () => {
     expect(useGameStore.getState().selectedComparisonId).toBeNull();
     expect(useGameStore.getState().comparisonResultsA).toEqual([]);
     expect(useGameStore.getState().comparisonResultsB).toEqual([]);
+  });
+});
+
+
+const deferred = <T,>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
+
+const postProgress = (worker: FakeWorker, completed: number, from = 0) => {
+  const job = worker.job!;
+  worker.onmessage?.({ data: {
+    jobId: job.jobId,
+    completed,
+    total: job.seeds.length,
+    results: job.seeds.slice(from, completed).map((seed, index) => ({
+      id: `${job.jobId}_${from + index}`,
+      batchId: job.batchId,
+      strategyId: job.strategyId,
+      seed,
+      moves: 'L',
+      finalScore: 4,
+      maxTile: 4,
+      moveCount: 1,
+      result: 'loss',
+      timestamp: Date.now(),
+      durationMs: 1,
+    })),
+  } } as MessageEvent);
+};
+
+describe('simulation cancellation and persistence races', () => {
+  beforeEach(async () => {
+    vi.stubGlobal('indexedDB', new IDBFactory());
+    await db.init();
+    FakeWorker.instances = [];
+    vi.stubGlobal('Worker', FakeWorker as unknown as typeof Worker);
+    useGameStore.setState({
+      worker: null,
+      isRunningBatch: false,
+      isRunningComparison: false,
+      viewMode: 'batch',
+      selectedBatchId: null,
+      batchResults: [],
+      storageError: null,
+    });
+  });
+
+  afterEach(async () => {
+    useGameStore.getState().stopBatchSimulation();
+    await flush();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('cancels comparison A without leaving comparison controls running or starting B', async () => {
+    useGameStore.getState().startComparisonSimulation(
+      { strategyType: 'random' }, { strategyType: 'merge_max' }, { batchSize: 1 }
+    );
+    const worker = FakeWorker.instances[0];
+    const queuedHandler = worker.onmessage;
+    useGameStore.getState().stopBatchSimulation();
+    expect(useGameStore.getState().isRunningComparison).toBe(false);
+    expect(useGameStore.getState().isRunningBatch).toBe(false);
+    expect(worker.terminated).toBe(true);
+    // A progress event already queued before terminate() must also be ignored.
+    queuedHandler?.({ data: { jobId: worker.job!.jobId, completed: 1, total: 1, results: [] } } as MessageEvent);
+    await flush();
+    expect(FakeWorker.instances).toHaveLength(1);
+    expect((await db.getBatch(worker.job!.batchId))?.status).toBe('failed');
+  });
+
+  it('cancels while final results persist, and never lets that job complete or start comparison B', async () => {
+    const pendingSave = deferred<void>();
+    const saveGames = vi.spyOn(db, 'saveGames').mockReturnValueOnce(pendingSave.promise);
+    useGameStore.getState().startComparisonSimulation(
+      { strategyType: 'random' }, { strategyType: 'merge_max' }, { batchSize: 1 }
+    );
+    const worker = FakeWorker.instances[0];
+    postProgress(worker, 1);
+    await vi.waitFor(() => expect(saveGames).toHaveBeenCalled());
+    // The worker is already gone, but the pending batch is still cancellable.
+    expect(useGameStore.getState().worker).toBeNull();
+    useGameStore.getState().stopBatchSimulation();
+    pendingSave.resolve();
+    await vi.waitFor(async () => expect((await db.getBatch(worker.job!.batchId))?.status).toBe('failed'));
+    expect(FakeWorker.instances).toHaveLength(1);
+    expect(useGameStore.getState().viewMode).toBe('batch');
+    expect(useGameStore.getState().isRunningComparison).toBe(false);
+  });
+
+  it('waits for earlier result writes before completing, and fails if an earlier delta rejects late', async () => {
+    const pendingSave = deferred<void>();
+    const saveGames = vi.spyOn(db, 'saveGames').mockReturnValueOnce(pendingSave.promise);
+    useGameStore.getState().startBatchSimulation({ strategyType: 'random', batchSize: 2, seedMode: 'random' });
+    const worker = FakeWorker.instances[0];
+    postProgress(worker, 1);
+    await vi.waitFor(() => expect(saveGames).toHaveBeenCalledTimes(1));
+    postProgress(worker, 2, 1);
+    await flush();
+    expect(saveGames).toHaveBeenCalledTimes(1);
+    expect(useGameStore.getState().isRunningBatch).toBe(true);
+    pendingSave.reject(new Error('late disk failure'));
+    await vi.waitFor(() => expect(useGameStore.getState().isRunningBatch).toBe(false));
+    expect(useGameStore.getState().storageError).toMatch(/late disk failure/);
+    expect(useGameStore.getState().viewMode).toBe('batch');
+    await vi.waitFor(async () => expect((await db.getBatch(worker.job!.batchId))?.status).toBe('failed'));
+  });
+
+  it('replaces a comparison during persistence without allowing the old run to overwrite the new one', async () => {
+    const pendingSave = deferred<void>();
+    const saveGames = vi.spyOn(db, 'saveGames').mockReturnValueOnce(pendingSave.promise);
+    useGameStore.getState().startComparisonSimulation(
+      { strategyType: 'random' }, { strategyType: 'merge_max' }, { batchSize: 1 }
+    );
+    postProgress(FakeWorker.instances[0], 1);
+    await vi.waitFor(() => expect(saveGames).toHaveBeenCalled());
+    useGameStore.getState().startBatchSimulation({ strategyType: 'pattern', batchSize: 1, seedMode: 'fixed', fixedSeed: 'NEW-RUN' });
+    const newBatchId = useGameStore.getState().currentBatchId;
+    pendingSave.resolve();
+    await flush();
+    await flush();
+    expect(FakeWorker.instances).toHaveLength(2);
+    expect(useGameStore.getState().currentBatchId).toBe(newBatchId);
+    expect(useGameStore.getState().isRunningComparison).toBe(false);
+    expect(useGameStore.getState().isRunningBatch).toBe(true);
+  });
+
+  it('generates different job, strategy and batch IDs for runs started in the same millisecond', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1234);
+    useGameStore.getState().startBatchSimulation({ strategyType: 'random', batchSize: 1, seedMode: 'random' });
+    const first = FakeWorker.instances[0].job!;
+    useGameStore.getState().startBatchSimulation({ strategyType: 'random', batchSize: 1, seedMode: 'random' });
+    const second = FakeWorker.instances[1].job!;
+    expect(second.batchId).not.toBe(first.batchId);
+    expect(second.jobId).not.toBe(first.jobId);
+    expect(second.strategyId).not.toBe(first.strategyId);
+  });
+
+  it('handles worker construction and message cloning failures without leaving running controls', async () => {
+    vi.stubGlobal('Worker', class { constructor() { throw new Error('workers blocked'); } });
+    useGameStore.getState().startComparisonSimulation(
+      { strategyType: 'random' }, { strategyType: 'merge_max' }, { batchSize: 1 }
+    );
+    await flush();
+    expect(useGameStore.getState().isRunningComparison).toBe(false);
+    expect(useGameStore.getState().storageError).toMatch(/workers blocked/);
+    vi.stubGlobal('Worker', FakeWorker);
+    vi.spyOn(FakeWorker.prototype, 'postMessage').mockImplementation(() => { throw new Error('cannot clone config'); });
+    useGameStore.getState().startBatchSimulation({ strategyType: 'random', batchSize: 1, seedMode: 'random' });
+    expect(useGameStore.getState().isRunningBatch).toBe(false);
+    expect(useGameStore.getState().worker).toBeNull();
+    expect(FakeWorker.instances[0].terminated).toBe(true);
+    expect(useGameStore.getState().storageError).toMatch(/cannot clone config/);
+  });
+
+  it.each([0, -1, 1.5, NaN, Infinity, 10001])('rejects invalid batch size %s before starting a worker', (batchSize) => {
+    useGameStore.getState().startBatchSimulation({ strategyType: 'random', batchSize, seedMode: 'random' });
+    expect(FakeWorker.instances).toHaveLength(0);
+    expect(useGameStore.getState().isRunningBatch).toBe(false);
+    expect(useGameStore.getState().storageError).toMatch(/whole number/);
+  });
+
+  it('requires a fixed seed rather than silently switching to random seeds', () => {
+    useGameStore.getState().startBatchSimulation({ strategyType: 'random', batchSize: 1, seedMode: 'fixed', fixedSeed: '  ' });
+    expect(FakeWorker.instances).toHaveLength(0);
+    expect(useGameStore.getState().storageError).toMatch(/Enter a seed/);
+  });
+});
+
+describe('saved strategy edits and history selection', () => {
+  beforeEach(async () => {
+    vi.stubGlobal('indexedDB', new IDBFactory());
+    await db.init();
+    useGameStore.setState({ storageError: null, selectedBatchId: null, batchResults: [] });
+  });
+
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  it('updates a saved strategy in place and preserves its stats', async () => {
+    await db.saveStrategy({
+      id: 'custom_original', name: 'Original', type: 'custom',
+      params: { customRules: [{ type: 'pattern', sequence: ['left'] }] },
+      stats: { gamesPlayed: 10, winRate: 0.2, avgScore: 100, avgMoves: 50, bestScore: 500 },
+    });
+    const savedId = await useGameStore.getState().saveCustomStrategy(' Revised ', [{ type: 'pattern', sequence: ['down'] }], 'custom_original');
+    expect(savedId).toBe('custom_original');
+    const strategies = await db.getAllStrategies();
+    expect(strategies).toHaveLength(1);
+    expect(strategies[0].name).toBe('Revised');
+    expect(strategies[0].stats.gamesPlayed).toBe(10);
+    expect(strategies[0].params.customRules).toEqual([{ type: 'pattern', sequence: ['down'] }]);
+  });
+
+  it('returns null on save failure and surfaces the error', async () => {
+    vi.spyOn(db, 'saveStrategy').mockRejectedValueOnce(new Error('disk unavailable'));
+    expect(await useGameStore.getState().saveCustomStrategy('Draft', [{ type: 'pattern', sequence: ['left'] }])).toBeNull();
+    expect(useGameStore.getState().storageError).toMatch(/disk unavailable/);
+  });
+
+  it('returns false on delete failure and preserves the saved strategy', async () => {
+    const id = await useGameStore.getState().saveCustomStrategy('Keep me', [{ type: 'pattern', sequence: ['left'] }]);
+    vi.spyOn(db, 'deleteStrategy').mockRejectedValueOnce(new Error('delete blocked'));
+    expect(await useGameStore.getState().deleteCustomStrategy(id!)).toBe(false);
+    expect((await db.getStrategy(id!))?.name).toBe('Keep me');
+    expect(useGameStore.getState().storageError).toMatch(/delete blocked/);
+  });
+
+  it('does not restore an older selection after a newer selection resolves', async () => {
+    const oldRequest = deferred<[]>();
+    vi.spyOn(db, 'getGamesByBatch').mockReturnValueOnce(oldRequest.promise).mockResolvedValueOnce([]);
+    const selectingOld = useGameStore.getState().selectBatch('old-batch');
+    await useGameStore.getState().selectBatch('new-batch');
+    oldRequest.resolve([]);
+    await selectingOld;
+    expect(useGameStore.getState().selectedBatchId).toBe('new-batch');
+  });
+
+  it('captures database initialization failure without an unhandled rejection', async () => {
+    vi.spyOn(db, 'init').mockRejectedValueOnce(new Error('storage disabled'));
+    await useGameStore.getState().initialize();
+    expect(useGameStore.getState().storageError).toMatch(/storage disabled/);
   });
 });

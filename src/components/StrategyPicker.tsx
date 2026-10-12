@@ -1,13 +1,3 @@
-/**
- * Strategy tile picker used by BatchConfigPanel.
- * One row of first-class tiles: built-in presets, a Repeat Sequence preset,
- * the user's saved strategies, and a "Create your own" tile that opens the
- * builder directly.
- *
- * Selection values: a built-in type, 'pattern', 'custom' (rules in hand from
- * the builder), or 'saved:<id>' for a saved strategy tile.
- */
-
 import type { Strategy } from '../storage/db';
 
 export type StrategyType =
@@ -25,20 +15,54 @@ export interface StrategyPickerProps {
   isRunning: boolean;
   savedStrategies?: Strategy[];
   onDeleteSaved?: (id: string) => void;
-  /** Hides the "Create your own" tile (Compare mode — saved tiles remain). */
+  onEditSaved?: (id: string) => void;
   excludeCreate?: boolean;
-  /** Called when the "Create your own" tile is clicked (opens the builder). */
   onCreate?: () => void;
-  /** Label of the transient custom strategy built this session, if any. */
   customStrategyName?: string;
 }
 
-const BUILT_INS: Array<{ type: StrategyType; title: string; blurb: string }> = [
-  { type: 'directional_priority', title: 'Directional Priority', blurb: 'L→D→R→U order' },
-  { type: 'corner_anchor', title: 'Corner Anchor', blurb: 'Keep max in corner' },
-  { type: 'merge_max', title: 'Merge Maximization', blurb: 'Prioritize merges' },
-  { type: 'random', title: 'Random', blurb: 'Baseline comparison' },
-  { type: 'pattern', title: 'Repeat Sequence', blurb: 'Cycle a fixed move pattern' },
+const BUILT_INS: Array<{
+  type: StrategyType;
+  title: string;
+  blurb: string;
+  glyph: string;
+  tag: string;
+}> = [
+  {
+    type: 'directional_priority',
+    title: 'Directional Priority',
+    blurb: 'Try left, down, right, then up.',
+    glyph: '← ↓',
+    tag: 'Simple',
+  },
+  {
+    type: 'corner_anchor',
+    title: 'Corner Anchor',
+    blurb: 'Keep your biggest tile in a corner.',
+    glyph: '↙',
+    tag: 'Position',
+  },
+  {
+    type: 'merge_max',
+    title: 'Merge Maximization',
+    blurb: 'Choose the move with most merges.',
+    glyph: '2+2',
+    tag: 'Greedy',
+  },
+  {
+    type: 'random',
+    title: 'Random',
+    blurb: 'A reproducible baseline to beat.',
+    glyph: '⤨',
+    tag: 'Baseline',
+  },
+  {
+    type: 'pattern',
+    title: 'Repeat Sequence',
+    blurb: 'Cycle through your own move order.',
+    glyph: '↻',
+    tag: 'Sequence',
+  },
 ];
 
 export function StrategyPicker({
@@ -47,89 +71,129 @@ export function StrategyPicker({
   isRunning,
   savedStrategies = [],
   onDeleteSaved,
+  onEditSaved,
   excludeCreate = false,
   onCreate,
   customStrategyName,
 }: StrategyPickerProps) {
   const tileClass = (selected: boolean) =>
-    `p-4 rounded-xl border-2 text-left transition-all ${
-      selected
-        ? 'border-accent bg-amber-500/15'
-        : 'border-dark-border bg-surface-raised hover:border-accent/60 hover:bg-surface-elevated'
-    } disabled:opacity-50 disabled:cursor-not-allowed`;
-
+    `strategy-tile relative rounded-xl border p-3.5 text-left transition-colors ${selected ? 'border-accent/80 bg-accent/10' : 'border-dark-border bg-surface-raised/60 hover:border-text-muted/60 hover:bg-surface-raised'} disabled:opacity-50 disabled:cursor-not-allowed`;
   return (
-    <div>
-      <label className="block text-sm font-medium text-text-muted mb-3">Choose Strategy</label>
-      <div className="grid grid-cols-2 gap-3">
+    <div className="space-y-3">
+      <div
+        className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2.5"
+        aria-label="Strategies"
+      >
         {BUILT_INS.map((option) => (
           <button
             key={option.type}
             onClick={() => onSelect(option.type)}
             disabled={isRunning}
+            aria-pressed={strategyType === option.type}
             className={tileClass(strategyType === option.type)}
           >
-            <div className="font-semibold text-text-primary">{option.title}</div>
-            <div className="text-xs text-text-muted mt-1">{option.blurb}</div>
+            <div className="flex items-center justify-between mb-3">
+              <span
+                aria-hidden="true"
+                className={`font-mono text-lg leading-none ${strategyType === option.type ? 'text-accent' : 'text-text-muted'}`}
+              >
+                {option.glyph}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-text-muted">
+                {strategyType === option.type ? '● Selected' : option.tag}
+              </span>
+            </div>
+            <div className="font-semibold text-sm text-text-primary">
+              {option.title}
+            </div>
+            <div className="text-xs leading-relaxed text-text-muted mt-1">
+              {option.blurb}
+            </div>
           </button>
         ))}
-
-        {savedStrategies.map((strategy) => {
-          const value = `saved:${strategy.id}`;
-          const converted = strategy.params?.converted === true;
-          return (
-            <div key={strategy.id} className="relative">
-              <button
-                onClick={() => onSelect(value as StrategyType)}
-                disabled={isRunning}
-                className={`${tileClass(strategyType === value)} w-full`}
-              >
-                <div className="font-semibold text-text-primary pr-6 truncate">
-                  {strategy.name}
-                </div>
-                <div className="text-xs text-text-muted mt-1">
-                  Saved strategy{converted ? ' · converted' : ''}
-                </div>
-              </button>
-              {onDeleteSaved && (
-                <button
-                  onClick={() => onDeleteSaved(strategy.id)}
-                  disabled={isRunning}
-                  aria-label={`Delete strategy ${strategy.name}`}
-                  title="Delete strategy"
-                  className="absolute top-2 right-2 text-text-muted hover:text-danger text-sm leading-none p-1"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          );
-        })}
-
-        {customStrategyName && (
-          <button
-            onClick={() => onSelect('custom')}
-            disabled={isRunning}
-            className={tileClass(strategyType === 'custom')}
-          >
-            <div className="font-semibold text-text-primary truncate">{customStrategyName}</div>
-            <div className="text-xs text-text-muted mt-1">Unsaved draft from the builder</div>
-          </button>
-        )}
-
         {!excludeCreate && (
           <button
-            onClick={() => (onCreate ? onCreate() : onSelect('custom'))}
+            onClick={onCreate}
             disabled={isRunning}
-            className={`${tileClass(false)} col-span-2 border-dashed`}
+            className={`${tileClass(false)} border-dashed border-accent/40 bg-accent/5 hover:border-accent`}
           >
-            <div className="font-semibold text-accent">+ Create your own</div>
-            <div className="text-xs text-text-muted mt-1">
-              Describe it to AI or tune the dials — then simulate it
+            <div
+              aria-hidden="true"
+              className="text-accent text-xl leading-none mb-3"
+            >
+              ＋
+            </div>
+            <div className="font-semibold text-sm text-accent">
+              Build your own
+            </div>
+            <div className="text-xs leading-relaxed text-text-muted mt-1">
+              Start with a preset, tune it, test it.
             </div>
           </button>
         )}
       </div>
+      {(savedStrategies.length > 0 || customStrategyName) && (
+        <div className="pt-3 border-t border-dark-border space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-text-muted">
+            Your strategy library
+          </p>
+          {savedStrategies.map((strategy) => {
+            const selected = strategyType === `saved:${strategy.id}`;
+            return (
+              <div
+                key={strategy.id}
+                className={`flex items-center rounded-lg border overflow-hidden ${selected ? 'border-accent/80 bg-accent/10' : 'border-dark-border bg-surface-raised/60'}`}
+              >
+                <button
+                  onClick={() => onSelect(`saved:${strategy.id}`)}
+                  disabled={isRunning}
+                  aria-pressed={selected}
+                  className="min-w-0 flex-1 px-3 py-2.5 text-left disabled:opacity-50"
+                >
+                  <div className="text-sm font-semibold truncate text-text-primary">
+                    {strategy.name}
+                  </div>
+                  <div className="text-[11px] text-text-muted mt-0.5">
+                    {selected ? 'Selected · ' : ''}Saved on this device
+                    {strategy.params?.converted ? ' · upgraded' : ''}
+                  </div>
+                </button>
+                {onEditSaved && (
+                  <button
+                    onClick={() => onEditSaved(strategy.id)}
+                    disabled={isRunning}
+                    aria-label={`Edit strategy ${strategy.name}`}
+                    className="px-2 py-3 text-xs text-text-muted hover:text-accent disabled:opacity-50"
+                  >
+                    Edit
+                  </button>
+                )}
+                {onDeleteSaved && (
+                  <button
+                    onClick={() => onDeleteSaved(strategy.id)}
+                    disabled={isRunning}
+                    aria-label={`Delete strategy ${strategy.name}`}
+                    className="px-3 py-3 text-lg text-text-muted hover:text-danger disabled:opacity-50"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {customStrategyName && (
+            <button
+              onClick={() => onSelect('custom')}
+              disabled={isRunning}
+              aria-pressed={strategyType === 'custom'}
+              className={`${tileClass(strategyType === 'custom')} w-full`}
+            >
+              <div className="font-semibold text-sm">{customStrategyName}</div>
+              <div className="text-xs text-text-muted mt-1">Current draft</div>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
